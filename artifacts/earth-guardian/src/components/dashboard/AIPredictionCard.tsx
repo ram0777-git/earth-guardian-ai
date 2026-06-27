@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { aiPrediction } from "@/data/sampleData";
+import { useGetAIPredictions } from "@workspace/api-client-react";
 import { Brain, Clock, Zap, ChevronRight } from "lucide-react";
 
 function Skeleton() {
@@ -21,9 +21,11 @@ function Skeleton() {
 }
 
 export function AIPredictionCard({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: ai, isLoading } = useGetAIPredictions();
 
-  const ai = aiPrediction;
+  if (loading || isLoading) return <Skeleton />;
+
+  if (!ai) return <Skeleton />;
   const confColor = ai.confidence >= 80 ? "#ef4444" : ai.confidence >= 60 ? "#f59e0b" : "#34d399";
 
   return (

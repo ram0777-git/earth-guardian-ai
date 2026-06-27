@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { timelineEvents } from "@/data/sampleData";
+import { useGetTimelineEvents } from "@workspace/api-client-react";
 import { Activity, Clock, Waves, Flame, Wind, Zap, Droplets } from "lucide-react";
 
 const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -34,7 +34,9 @@ function Skeleton() {
 }
 
 export function DisasterTimeline({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: timelineEvents = [], isLoading } = useGetTimelineEvents();
+
+  if (loading || isLoading) return <Skeleton />;
 
   return (
     <div
@@ -81,7 +83,9 @@ export function DisasterTimeline({ loading }: { loading: boolean }) {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${tc}15`, border: `1px solid ${tc}30` }}>
-                        <Icon className="h-3.5 w-3.5" style={{ color: tc }} />
+                        <span style={{ color: tc }}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
                       </div>
                       <h4 className="text-sm font-semibold text-white">{ev.title}</h4>
                     </div>

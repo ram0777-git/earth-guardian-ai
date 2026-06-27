@@ -662,7 +662,7 @@ function StatChip({ icon, value, label, color, delay = 0, pulse = false, classNa
     <motion.div
       initial={{ opacity: 0, scale: 0.8, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] as const }}
       className={`absolute z-10 ${className}`}
     >
       <motion.div

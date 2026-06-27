@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { overallRiskScore, riskFactors } from "@/data/sampleData";
+import { useGetRiskFactors, useGetOverallRiskScore } from "@workspace/api-client-react";
 import { AlertTriangle } from "lucide-react";
 
 function getRisk(s: number) {
@@ -28,8 +28,12 @@ function Skeleton() {
 }
 
 export function RiskScoreCard({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: riskScore, isLoading: scoreLoading } = useGetOverallRiskScore();
+  const { data: riskFactors = [], isLoading: factorsLoading } = useGetRiskFactors();
 
+  if (loading || scoreLoading || factorsLoading) return <Skeleton />;
+
+  const overallRiskScore = riskScore?.overall ?? 68;
   const risk = getRisk(overallRiskScore);
   const R = 72;
   const circ = 2 * Math.PI * R;

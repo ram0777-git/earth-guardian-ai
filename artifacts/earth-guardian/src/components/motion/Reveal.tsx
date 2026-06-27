@@ -60,7 +60,7 @@ export function Reveal({
       whileInView="visible"
       viewport={{ once, margin: "-60px" }}
       variants={variantMap[variant]}
-      transition={{ duration, delay, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration, delay, ease: [0.22, 1, 0.36, 1] as const }}
       className={cn(className)}
     >
       {children}
@@ -111,7 +111,7 @@ export function StaggerItem({
   return (
     <motion.div
       variants={variantMap[variant]}
-      transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] as const }}
       className={className}
     >
       {children}

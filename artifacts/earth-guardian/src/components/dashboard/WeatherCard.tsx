@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { weatherData } from "@/data/sampleData";
+import { useGetWeather } from "@workspace/api-client-react";
 import { Cloud, Droplets, Sun, Wind, MapPin, Thermometer } from "lucide-react";
 
 const conditionIcon: Record<string, string> = {
@@ -23,9 +23,11 @@ function Skeleton() {
 }
 
 export function WeatherCard({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: w, isLoading } = useGetWeather();
 
-  const w = weatherData;
+  if (loading || isLoading) return <Skeleton />;
+
+  if (!w) return <Skeleton />;
 
   return (
     <div

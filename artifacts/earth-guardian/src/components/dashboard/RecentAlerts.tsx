@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Bell, MapPin, Clock, ExternalLink } from "lucide-react";
-import { recentAlerts } from "@/data/sampleData";
+import { useGetAlerts } from "@workspace/api-client-react";
 
 const severityConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
   critical: { label: "Critical", color: "#ef4444", bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.3)"  },
@@ -21,7 +21,9 @@ function Skeleton() {
 }
 
 export function RecentAlerts({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: alerts = [], isLoading } = useGetAlerts();
+
+  if (loading || isLoading) return <Skeleton />;
 
   return (
     <div
@@ -33,7 +35,7 @@ export function RecentAlerts({ loading }: { loading: boolean }) {
           <Bell className="h-4 w-4 text-cyan-400" />
           <h3 className="font-semibold text-white">Recent Alerts</h3>
           <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400">
-            {recentAlerts.length}
+            {alerts.length}
           </span>
         </div>
         <span className="relative flex h-2.5 w-2.5">
@@ -43,7 +45,7 @@ export function RecentAlerts({ loading }: { loading: boolean }) {
       </div>
 
       <div className="divide-y divide-white/4">
-        {recentAlerts.map((alert, i) => {
+        {alerts.map((alert, i: number) => {
           const sev = severityConfig[alert.severity] ?? severityConfig.low;
           return (
             <motion.div

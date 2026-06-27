@@ -22,7 +22,7 @@ export function SectionHeader({
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
         className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl"
       >
         {title}
@@ -32,7 +32,7 @@ export function SectionHeader({
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] as const }}
           className={cn(
             "mt-3 text-lg text-slate-600",
             align === "center" && "mx-auto max-w-2xl"
@@ -45,7 +45,7 @@ export function SectionHeader({
         initial={{ scaleX: 0 }}
         whileInView={{ scaleX: 1 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] as const }}
         className={cn(
           "mt-4 h-1 w-16 rounded-full bg-gradient-to-r from-primary to-cyan origin-left",
           align === "center" && "mx-auto origin-center"

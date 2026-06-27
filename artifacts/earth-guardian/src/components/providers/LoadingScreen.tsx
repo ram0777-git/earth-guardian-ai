@@ -19,7 +19,7 @@ export function LoadingScreen() {
           key="loader"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] as const }}
           className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-[#06121F]"
         >
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(26,115,232,0.15)_0%,transparent_70%)]" />
@@ -27,7 +27,7 @@ export function LoadingScreen() {
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] as const }}
             className="relative"
           >
             <motion.div
@@ -73,7 +73,7 @@ export function LoadingScreen() {
           <motion.div
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
-            transition={{ delay: 0.4, duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.4, duration: 1.8, ease: [0.22, 1, 0.36, 1] as const }}
             className="mt-8 h-0.5 w-48 origin-left rounded-full bg-gradient-to-r from-primary via-cyan to-transparent"
           />
         </motion.div>

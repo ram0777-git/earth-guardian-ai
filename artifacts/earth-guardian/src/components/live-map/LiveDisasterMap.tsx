@@ -9,7 +9,8 @@ import {
   Globe, ChevronLeft, ChevronRight, Clock, Users, Gauge,
   ExternalLink, SlidersHorizontal, CheckSquare, Square,
 } from "lucide-react";
-import { sampleMapDisasters, DISASTER_TYPE_CONFIG, type DisasterEvent } from "@/data/mapData";
+import { useGetDisasters } from "@workspace/api-client-react";
+import { DISASTER_TYPE_CONFIG, type DisasterEvent } from "@/data/mapData";
 
 /* ── Constants ───────────────────────────────────────────── */
 
@@ -179,10 +180,27 @@ export function LiveDisasterMap() {
     fetchUSGS().then(() => setRefreshing(false));
   };
 
+  const { data: apiDisasters = [] } = useGetDisasters();
+
   /* All + filtered events */
   const allEvents = useMemo(
-    () => [...earthquakes, ...sampleMapDisasters],
-    [earthquakes]
+    () => [...earthquakes, ...apiDisasters.map((d): DisasterEvent => ({
+      id: d.id,
+      type: d.type as DisasterEvent["type"],
+      title: d.name,
+      location: `${d.lat.toFixed(2)}, ${d.lng.toFixed(2)}`,
+      country: "Global",
+      lat: d.lat,
+      lng: d.lng,
+      severity: d.severity,
+      magnitude: undefined,
+      depth: undefined,
+      time: d.timestamp ? new Date(d.timestamp).toLocaleString() : 'N/A',
+      status: "Active",
+      source: "sample" as const,
+      description: d.description,
+    }))],
+    [earthquakes, apiDisasters]
   );
 
   const filteredEvents = useMemo(() => {
@@ -655,7 +673,7 @@ function InfoPanel({
               style={{ backgroundColor: sc }}
               initial={{ width: 0 }}
               animate={{ width: { critical: "100%", high: "75%", moderate: "50%", low: "25%" }[event.severity] }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] as const }}
             />
           </div>
         </div>

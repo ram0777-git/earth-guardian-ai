@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { activeDisastersList } from "@/data/dashboardData";
+import { useGetDisasters } from "@workspace/api-client-react";
 import { Droplets, Flame, Zap, Wind, Waves, AlertTriangle, MapPin, Users, Clock } from "lucide-react";
 
 const typeIcon: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -31,7 +31,9 @@ function Skeleton() {
 }
 
 export function ActiveDisasters({ loading }: { loading: boolean }) {
-  if (loading) return <Skeleton />;
+  const { data: disasters = [], isLoading } = useGetDisasters();
+
+  if (loading || isLoading) return <Skeleton />;
 
   return (
     <div
@@ -48,12 +50,12 @@ export function ActiveDisasters({ loading }: { loading: boolean }) {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
           </span>
-          {activeDisastersList.length} Active
+          {disasters.length} Active
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {activeDisastersList.map((d, i) => {
+        {disasters.map((d, i: number) => {
           const Icon = typeIcon[d.type] ?? AlertTriangle;
           const tc   = typeColor[d.type] ?? "#60a5fa";
           const sc   = severityConfig[d.severity] ?? severityConfig.low;
@@ -76,7 +78,9 @@ export function ActiveDisasters({ loading }: { loading: boolean }) {
                   className="flex h-9 w-9 items-center justify-center rounded-xl"
                   style={{ backgroundColor: `${tc}15`, border: `1px solid ${tc}30` }}
                 >
-                  <Icon className="h-4.5 w-4.5" style={{ color: tc }} />
+                  <span style={{ color: tc }}>
+                    <Icon className="h-4.5 w-4.5" />
+                  </span>
                 </div>
                 <span
                   className="rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
@@ -87,45 +91,19 @@ export function ActiveDisasters({ loading }: { loading: boolean }) {
               </div>
 
               {/* Title + location */}
-              <h4 className="text-sm font-semibold text-white leading-tight">{d.title}</h4>
+              <h4 className="text-sm font-semibold text-white leading-tight">{d.name}</h4>
               <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
                 <MapPin className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{d.location}</span>
-              </div>
-              <div className="mt-0.5 text-[10px] text-slate-500">{d.country}</div>
-
-              {/* Stats row */}
-              <div className="mt-3 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1 text-slate-400">
-                  <Users className="h-3 w-3" />
-                  <span>{d.affected} affected</span>
-                </div>
-                <div className="flex items-center gap-1 text-slate-500">
-                  <Clock className="h-3 w-3" />
-                  {d.started}
-                </div>
+                <span className="truncate">{d.lat.toFixed(2)}, {d.lng.toFixed(2)}</span>
               </div>
 
-              {/* AI confidence bar */}
-              <div className="mt-3">
-                <div className="mb-1 flex items-center justify-between text-[10px]">
-                  <span className="text-slate-500">AI Confidence</span>
-                  <span className="font-bold" style={{ color: tc }}>{d.aiConfidence}%</span>
-                </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-white/8">
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: tc }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${d.aiConfidence}%` }}
-                    transition={{ duration: 0.8, delay: 0.3 + i * 0.07 }}
-                  />
-                </div>
-              </div>
+              {/* Description */}
+              <div className="mt-2 text-[10px] text-slate-400 line-clamp-2">{d.description}</div>
 
-              {/* Status badge */}
-              <div className="mt-2.5">
-                <span className="text-[10px] font-medium text-slate-400">{d.status}</span>
+              {/* Timestamp */}
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-500">
+                <Clock className="h-3 w-3" />
+                {d.timestamp ? new Date(d.timestamp).toLocaleString() : 'N/A'}
               </div>
             </motion.div>
           );

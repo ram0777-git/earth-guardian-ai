@@ -14,7 +14,7 @@ import {
 } from "@/data/riskData";
 
 /* ── Animations ──────────────────────────────────────── */
-const fadeUp  = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } } };
+const fadeUp  = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const } } };
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 
 /* ── Scan steps ──────────────────────────────────────── */
@@ -82,7 +82,7 @@ function RiskGauge({
             strokeDasharray={circ}
             initial={{ strokeDashoffset: circ }}
             animate={{ strokeDashoffset: dashoffset }}
-            transition={{ duration: 1.5, delay: delay + 0.15, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 1.5, delay: delay + 0.15, ease: [0.22, 1, 0.36, 1] as const }}
           />
         </svg>
         {/* Score overlay */}
@@ -137,13 +137,13 @@ function OverallScoreRing({ score, level }: { score: number; level: string }) {
           initial={{ strokeDashoffset: circ }}
           animate={{ strokeDashoffset: offset }}
           style={{ transformOrigin: "90px 90px", rotate: "-90deg" }}
-          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] as const }}
         />
       </svg>
       <div className="absolute flex flex-col items-center">
         <motion.span className="text-5xl font-black text-white" style={{ color: clr }}
           initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] as const }}
         >{score}</motion.span>
         <span className="text-xs text-white/35 font-medium mt-0.5">out of 100</span>
       </div>

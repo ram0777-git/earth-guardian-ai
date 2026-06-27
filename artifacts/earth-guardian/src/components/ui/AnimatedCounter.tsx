@@ -29,7 +29,7 @@ export function AnimatedCounter({
 
     const controls = animate(0, value, {
       duration,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as const,
       onUpdate: (v) => setDisplay(v),
     });
 
