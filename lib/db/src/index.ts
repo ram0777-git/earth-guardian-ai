@@ -11,6 +11,6 @@ if (!databaseUrl) {
 }
 
 export const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
-export const db = databaseUrl ? drizzle(pool, { schema }) : null;
+export const db = pool ? drizzle(pool, { schema }) : null;
 
 export * from "./schema";
