@@ -1,6 +1,6 @@
-# [Project name]
+# Earth Guardian AI
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An AI-powered disaster prediction platform that helps communities prepare for and respond to natural disasters with real-time alerts, risk analysis, and volunteer coordination.
 
 ## Run & Operate
 
@@ -22,15 +22,32 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/earth-guardian/` — React + Vite frontend app (served at `/`)
+- `artifacts/earth-guardian/src/components/` — All UI components (organized by page)
+- `artifacts/earth-guardian/src/pages/` — Page route components
+- `artifacts/earth-guardian/src/data/` — Sample data and type definitions
+- `artifacts/earth-guardian/src/index.css` — Global CSS with theme tokens and animations
+- `artifacts/api-server/` — Express API backend (served at `/api`)
+- `lib/api-spec/openapi.yaml` — API spec (source of truth)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Migrated from Next.js → Vite + React with wouter for routing
+- `next/link` replaced with wouter `Link`; `usePathname` → wouter `useLocation`
+- `next/dynamic` lazy loading replaced with React `lazy` + `Suspense`
+- All `"use client"` directives removed (not applicable in Vite)
+- Tailwind v4 with custom CSS variables for glassmorphism theme
+- Lenis smooth scroll provider wraps the whole app
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Home: animated hero with AI earth visualization, feature showcase, statistics
+- Dashboard: risk scores, weather cards, AI predictions, charts, disaster timeline
+- Risk Analysis: regional risk factor breakdown
+- Live Map: global disaster event map
+- Emergency Planner: personalized preparedness checklist
+- Volunteer Network: community volunteer coordination
+- About: project and team information
 
 ## User preferences
 
