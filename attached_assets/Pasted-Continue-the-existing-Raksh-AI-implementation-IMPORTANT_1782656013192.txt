@@ -1,0 +1,274 @@
+Continue the existing Raksh AI implementation.
+
+IMPORTANT
+
+Do NOT rebuild Raksh AI.
+
+Do NOT redesign the UI.
+
+Do NOT recreate pages.
+
+Do NOT change project architecture.
+
+The Raksh AI page, floating assistant, backend routes and chat interface already exist.
+
+Only integrate Google Gemini 2.5 Flash into the existing implementation.
+
+=====================================================
+
+GOAL
+
+Make Raksh AI fully functional using Google Gemini 2.5 Flash.
+
+=====================================================
+
+MODEL
+
+Use Google's Gemini API.
+
+Default model:
+
+gemini-2.5-flash
+
+Create a clean provider layer so the model can be changed later from one file.
+
+=====================================================
+
+ENVIRONMENT VARIABLES
+
+Use only:
+
+GEMINI_API_KEY
+
+Optional:
+
+GEMINI_MODEL=gemini-2.5-flash
+
+If the key is missing:
+
+Show a professional setup screen.
+
+Do NOT crash.
+
+=====================================================
+
+BACKEND
+
+Implement secure server-side Gemini integration.
+
+Never expose API keys to the frontend.
+
+Implement:
+
+• streaming responses if supported
+
+• retry logic
+
+• timeout handling
+
+• graceful error handling
+
+• request validation
+
+• markdown responses
+
+=====================================================
+
+CHAT
+
+Support:
+
+Conversation history
+
+Markdown
+
+Tables
+
+Code blocks
+
+Bullet lists
+
+Typing animation
+
+Copy response
+
+Regenerate response
+
+Clear conversation
+
+Auto scroll
+
+Suggested prompts
+
+=====================================================
+
+APPLICATION CONTEXT
+
+Raksh AI should automatically understand:
+
+Current page
+
+Current selected location
+
+Weather
+
+Disaster data
+
+Risk score
+
+Emergency planner
+
+Preparedness checklist
+
+Live map selection
+
+Whenever available.
+
+=====================================================
+
+SPECIALIZED DISASTER ASSISTANT
+
+Raksh AI should specialize in:
+
+Earthquakes
+
+Floods
+
+Cyclones
+
+Wildfires
+
+Heatwaves
+
+Tsunamis
+
+Landslides
+
+Storms
+
+Emergency response
+
+Preparedness
+
+Climate awareness
+
+First aid
+
+Risk explanation
+
+=====================================================
+
+GENERAL KNOWLEDGE
+
+If users ask normal questions:
+
+Answer using Gemini.
+
+=====================================================
+
+SMART RESPONSES
+
+Never fabricate live disaster information.
+
+Always distinguish:
+
+Live project data
+
+Historical information
+
+AI recommendation
+
+Unavailable information
+
+=====================================================
+
+EMERGENCY MODE
+
+If the prompt contains:
+
+HELP
+
+SOS
+
+Emergency
+
+Flood
+
+Fire
+
+Earthquake
+
+Cyclone
+
+Accident
+
+Switch into emergency mode.
+
+Provide:
+
+Immediate actions
+
+Warnings
+
+First aid
+
+Emergency contacts
+
+Preparedness steps
+
+=====================================================
+
+TOOLS
+
+Allow Raksh AI to interact with existing application features whenever possible.
+
+Examples:
+
+Navigate to Dashboard.
+
+Navigate to Live Map.
+
+Navigate to Risk Analysis.
+
+Generate preparedness checklist.
+
+Generate emergency plan.
+
+Explain charts.
+
+Explain AI risk score.
+
+Explain disaster timeline.
+
+=====================================================
+
+QUALITY
+
+No TypeScript errors.
+
+No runtime errors.
+
+No API key exposure.
+
+Responsive.
+
+Production ready.
+
+=====================================================
+
+WHEN FINISHED
+
+Return only:
+
+1. Files modified
+
+2. Gemini integration completed
+
+3. Environment variables required
+
+4. Manual setup
+
+5. Build status
+
+Do not rebuild existing Raksh AI.
+Integrate Gemini into the current implementation only.
