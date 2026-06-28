@@ -31,8 +31,12 @@ import {
   Upload,
   FileBarChart,
   Headphones,
+  Maximize2,
+  Minimize2,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
-import type { RakshCommand } from "./RakshContext";
+import type { RakshCommand, RakshGeneratedImage } from "./RakshContext";
 import { useRaksh } from "./RakshContext";
 import { RakshMarkdown } from "./RakshMarkdown";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
@@ -41,12 +45,23 @@ import { cn } from "@/lib/utils";
 const SUGGESTED_PROMPTS = [
   "📡 What disasters are active right now?",
   "🌤️ What's the current weather and risk level?",
+  "🎨 Generate a flood preparedness poster",
+  "🖼️ Create an earthquake safety infographic",
   "⚠️ Show me all active alerts",
   "🔮 What's the AI prediction for next 48 hours?",
-  "🛡️ Am I safe? Give me a full safety check",
-  "📋 Generate a family emergency preparedness plan",
+  "🎨 Generate a wildfire awareness banner",
   "💥 What if a magnitude 7.5 quake hits Mumbai?",
-  "🚑 Create an evacuation plan for my office",
+];
+
+const IMAGE_TEMPLATE_PROMPTS = [
+  { label: "Flood Poster", prompt: "Generate a flood preparedness poster with safety tips and emergency contacts" },
+  { label: "Earthquake Infographic", prompt: "Create an earthquake safety infographic showing drop cover hold on steps" },
+  { label: "Wildfire Banner", prompt: "Generate a wildfire awareness banner with evacuation and alert information" },
+  { label: "Cyclone Poster", prompt: "Create a cyclone preparedness poster with shelter and supply checklist" },
+  { label: "Emergency Kit", prompt: "Generate an emergency kit illustration showing all essential survival items" },
+  { label: "Evacuation Map", prompt: "Create an evacuation route diagram for a disaster emergency scenario" },
+  { label: "Shelter Layout", prompt: "Generate a shelter layout diagram showing capacity, zones, and services" },
+  { label: "Tsunami Guide", prompt: "Create a tsunami safety awareness poster with evacuation route markers" },
 ];
 
 const COMMAND_ICONS: Record<string, React.ReactNode> = {
@@ -118,6 +133,120 @@ function VoiceWaveform() {
   );
 }
 
+interface GeneratedImageBubbleProps {
+  image: RakshGeneratedImage;
+  onRegenerate: () => void;
+  onVariation: () => void;
+  onFullscreen: (image: RakshGeneratedImage) => void;
+  isStreaming: boolean;
+}
+
+function GeneratedImageBubble({ image, onRegenerate, onVariation, onFullscreen, isStreaming }: GeneratedImageBubbleProps) {
+  const [copied, setCopied] = useState(false);
+  const dataUri = `data:${image.mimeType};base64,${image.imageData}`;
+
+  const handleDownload = () => {
+    const a = document.createElement("a");
+    a.href = dataUri;
+    const ext = image.mimeType.split("/")[1] ?? "jpg";
+    a.download = `raksh-${image.seed}.${ext}`;
+    a.click();
+  };
+
+  const handleCopyPrompt = () => {
+    navigator.clipboard.writeText(image.prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-2 max-w-[90%]">
+      {/* Image */}
+      <div
+        className="relative group rounded-2xl overflow-hidden cursor-pointer"
+        style={{ border: "1px solid rgba(139,92,246,0.3)" }}
+        onClick={() => onFullscreen(image)}
+      >
+        <img
+          src={dataUri}
+          alt={image.prompt}
+          className="w-full object-contain max-h-80 block"
+          style={{ background: "rgba(0,0,0,0.3)" }}
+        />
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-white font-medium" style={{ background: "rgba(0,0,0,0.7)" }}>
+            <Maximize2 className="h-4 w-4" />
+            Full screen
+          </div>
+        </div>
+        {/* Provider badge */}
+        <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-violet-200 font-medium" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <Sparkles className="h-2.5 w-2.5" />
+          {image.provider}
+        </div>
+      </div>
+
+      {/* Prompt label */}
+      <p className="text-[11px] text-slate-400 px-1 truncate" title={image.prompt}>
+        🎨 {image.prompt}
+      </p>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition-colors hover:text-white"
+          style={{ background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.25)" }}
+        >
+          <Download className="h-3 w-3" />
+          Download
+        </button>
+        <button
+          type="button"
+          onClick={onRegenerate}
+          disabled={isStreaming}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-cyan-300 transition-colors hover:text-white disabled:opacity-40"
+          style={{ background: "rgba(0,188,212,0.12)", border: "1px solid rgba(0,188,212,0.25)" }}
+        >
+          <RefreshCw className="h-3 w-3" />
+          Regenerate
+        </button>
+        <button
+          type="button"
+          onClick={onVariation}
+          disabled={isStreaming}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-violet-300 transition-colors hover:text-white disabled:opacity-40"
+          style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)" }}
+        >
+          <Wand2 className="h-3 w-3" />
+          Variation
+        </button>
+        <button
+          type="button"
+          onClick={handleCopyPrompt}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:text-white"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+        >
+          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied!" : "Copy prompt"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onFullscreen(image)}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:text-white"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+        >
+          <Maximize2 className="h-3 w-3" />
+          Full screen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface AttachmentState {
   type: "image" | "document";
   name: string;
@@ -139,6 +268,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     isStreaming,
     sendMessage,
     sendMessageWithAttachment,
+    generateImage,
     stopStreaming,
     newConversation,
     selectConversation,
@@ -163,6 +293,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   const [isDragging, setIsDragging] = useState(false);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState<RakshGeneratedImage | null>(null);
   const handsFreeRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -684,6 +815,35 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                   </button>
                 ))}
               </div>
+
+              {/* Image generation templates */}
+              {!compact && (
+                <div className="w-full">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="h-3 w-3 text-violet-400" />
+                    <span className="text-[11px] text-slate-500 font-medium">AI Image Templates</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {IMAGE_TEMPLATE_PROMPTS.slice(0, 8).map((t) => (
+                      <button
+                        key={t.label}
+                        type="button"
+                        onClick={() => sendMessage(t.prompt)}
+                        className="rounded-xl px-2 py-2 text-[10px] text-violet-300 text-center transition-all hover:text-white"
+                        style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)" }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = "rgba(139,92,246,0.18)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = "rgba(139,92,246,0.08)";
+                        }}
+                      >
+                        🎨 {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -740,16 +900,33 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                   </div>
                 ) : (
                   /* Assistant message */
-                  <div
-                    className="rounded-2xl rounded-tl-sm px-3.5 py-2.5"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-                  >
-                    {msg.content === "" && isStreaming && idx === messages.length - 1 ? (
-                      <TypingIndicator />
-                    ) : (
-                      <RakshMarkdown content={msg.content} />
-                    )}
-                  </div>
+                  msg.generatedImage ? (
+                    /* Generated image bubble */
+                    <GeneratedImageBubble
+                      image={msg.generatedImage}
+                      isStreaming={isStreaming}
+                      onFullscreen={setFullscreenImage}
+                      onRegenerate={() => generateImage(msg.generatedImage!.prompt)}
+                      onVariation={() => generateImage(msg.generatedImage!.prompt, Math.floor(Math.random() * 999_999))}
+                    />
+                  ) : (
+                    <div
+                      className="rounded-2xl rounded-tl-sm px-3.5 py-2.5"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                    >
+                      {msg.content === "" && isStreaming && idx === messages.length - 1 ? (
+                        <TypingIndicator />
+                      ) : msg.content === "🎨 Generating your image with Raksh AI…" && isStreaming ? (
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-violet-400 animate-pulse" />
+                          <span className="text-sm text-slate-300">Generating your image…</span>
+                          <TypingIndicator />
+                        </div>
+                      ) : (
+                        <RakshMarkdown content={msg.content} />
+                      )}
+                    </div>
+                  )
                 )}
 
                 {/* Assistant action buttons */}
@@ -953,10 +1130,83 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
           </div>
 
           <p className="text-center text-[10px] text-slate-600 mt-1.5">
-            Raksh AI · Voice · Vision · Documents · Press <kbd className="text-slate-500">Enter</kbd> to send
+            Raksh AI · Voice · Vision · Images · Documents · Press <kbd className="text-slate-500">Enter</kbd> to send
           </p>
         </div>
       </div>
+
+      {/* Fullscreen image modal */}
+      <AnimatePresence>
+        {fullscreenImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex flex-col"
+            style={{ background: "rgba(0,0,0,0.95)" }}
+            onClick={() => setFullscreenImage(null)}
+          >
+            {/* Modal header */}
+            <div
+              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+              style={{ background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-violet-400" />
+                <span className="text-sm font-medium text-white">Generated by Raksh AI</span>
+                <span className="text-[11px] text-slate-500">· {fullscreenImage.provider} · {fullscreenImage.width}×{fullscreenImage.height}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const a = document.createElement("a");
+                    a.href = `data:${fullscreenImage.mimeType};base64,${fullscreenImage.imageData}`;
+                    const ext = fullscreenImage.mimeType.split("/")[1] ?? "jpg";
+                    a.download = `raksh-${fullscreenImage.seed}.${ext}`;
+                    a.click();
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-emerald-300 hover:text-white transition-colors"
+                  style={{ background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.25)" }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFullscreenImage(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image */}
+            <div
+              className="flex-1 flex items-center justify-center p-6 overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={`data:${fullscreenImage.mimeType};base64,${fullscreenImage.imageData}`}
+                alt={fullscreenImage.prompt}
+                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                style={{ border: "1px solid rgba(139,92,246,0.3)" }}
+              />
+            </div>
+
+            {/* Prompt footer */}
+            <div
+              className="px-4 py-2 flex-shrink-0 text-center"
+              style={{ background: "rgba(0,0,0,0.6)", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-xs text-slate-400 truncate">🎨 {fullscreenImage.prompt}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

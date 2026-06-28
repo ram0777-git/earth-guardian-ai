@@ -627,6 +627,96 @@ router.post("/raksh/chat", async (req, res) => {
   }
 });
 
+// ── Route: AI Image Generation ───────────────────────────────────────────────
+router.post("/raksh/generate-image", async (req, res) => {
+  const {
+    prompt,
+    seed: reqSeed,
+    width: reqWidth,
+    height: reqHeight,
+  } = req.body as {
+    prompt: string;
+    seed?: number;
+    width?: number;
+    height?: number;
+  };
+
+  if (!prompt || typeof prompt !== "string") {
+    res.status(400).json({ error: "prompt is required" });
+    return;
+  }
+
+  // Detect image orientation from prompt
+  const isPortrait = /poster|infographic|flyer|guide|vertical|tall/i.test(prompt);
+  const isLandscape = /banner|wide|horizontal|landscape/i.test(prompt);
+  const width = reqWidth ?? (isLandscape ? 1216 : isPortrait ? 832 : 1024);
+  const height = reqHeight ?? (isLandscape ? 512 : isPortrait ? 1152 : 1024);
+  const seed = reqSeed ?? Math.floor(Math.random() * 999_999);
+
+  // Enhance prompt with Gemini if available
+  const gemini = getGeminiClient();
+  let enhancedPrompt = prompt;
+
+  if (gemini) {
+    try {
+      const enhanceSystem = `You are a professional image prompt engineer for disaster preparedness and emergency management graphics.
+Enhance the user's prompt to be more detailed and visually impactful for AI image generation.
+Return ONLY the enhanced prompt — no explanations, no quotes, no preamble.
+Guidelines:
+- Add specific visual style descriptors (e.g. "flat design", "infographic style", "bold typography")
+- For posters: add "official government style, bold headline, clear call to action, vibrant colors"
+- For diagrams: add "clear icons, step-by-step layout, high contrast, easy to read"
+- For banners: add "wide format, striking design, high impact"
+- Always include: "high quality, professional design, sharp, detailed"
+- Keep under 150 words.`;
+      const enhanceModel = getGeminiModel(gemini, enhanceSystem);
+      const result = await withTimeout(enhanceModel.generateContent(prompt), 10_000);
+      const t = result.response.text().trim();
+      if (t.length > 20) enhancedPrompt = t;
+    } catch {
+      // Use original prompt if enhancement fails
+    }
+  }
+
+  const finalPrompt = `${enhancedPrompt}, ultra detailed, professional quality, 4k`;
+
+  // Fetch from Pollinations.ai (free, CORS-enabled, no key needed)
+  const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90_000);
+
+    const imageResp = await fetch(pollinationsUrl, {
+      signal: controller.signal,
+      headers: { "User-Agent": "EarthGuardianAI/1.0" },
+    });
+    clearTimeout(timer);
+
+    if (!imageResp.ok) {
+      throw new Error(`Image service returned ${imageResp.status}`);
+    }
+
+    const contentType = (imageResp.headers.get("content-type") ?? "image/jpeg").split(";")[0]!;
+    const arrayBuffer = await imageResp.arrayBuffer();
+    const imageData = Buffer.from(arrayBuffer).toString("base64");
+
+    res.json({
+      imageData,
+      mimeType: contentType,
+      prompt,
+      enhancedPrompt: finalPrompt,
+      provider: "pollinations/flux",
+      seed,
+      width,
+      height,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Image generation failed";
+    res.status(500).json({ error: msg });
+  }
+});
+
 // ── Route: Comprehensive Intelligence Report ──────────────────────────────────
 router.post("/raksh/generate-report", async (req, res) => {
   const gemini = getGeminiClient();

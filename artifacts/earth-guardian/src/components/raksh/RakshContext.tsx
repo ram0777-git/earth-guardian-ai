@@ -15,6 +15,17 @@ export interface RakshAttachment {
   mimeType: string;
 }
 
+export interface RakshGeneratedImage {
+  imageData: string;   // base64
+  mimeType: string;
+  prompt: string;
+  enhancedPrompt: string;
+  provider: string;
+  seed: number;
+  width: number;
+  height: number;
+}
+
 export interface RakshMessage {
   id: string;
   role: "user" | "assistant";
@@ -22,6 +33,7 @@ export interface RakshMessage {
   timestamp: number;
   commands?: RakshCommand[];
   attachment?: RakshAttachment;
+  generatedImage?: RakshGeneratedImage;
 }
 
 export interface RakshCommand {
@@ -72,6 +84,7 @@ interface RakshContextValue {
     fileType: "image" | "document",
     previewUrl?: string,
   ) => Promise<void>;
+  generateImage: (prompt: string, seed?: number) => Promise<void>;
   stopStreaming: () => void;
   setSelectedDisaster: (d: SelectedDisaster | null) => void;
   setSelectedLocation: (loc: string | null) => void;
@@ -82,6 +95,20 @@ const RakshContext = createContext<RakshContextValue | null>(null);
 
 const STORAGE_KEY = "raksh_conversations";
 
+// ── Image intent detection ─────────────────────────────────────────────────────
+const IMAGE_GEN_PATTERNS = [
+  /\b(generate|create|make|design|produce|build|draw)\s+(an?\s+)?(image|picture|photo|poster|infographic|illustration|logo|banner|diagram|graphic|visualization|flyer|layout|map)\b/i,
+  /\b(visualize|illustrate|depict|sketch|render)\b/i,
+  /\bcreate\s+(poster|infographic|banner|diagram|illustration|logo|flyer)\b/i,
+  /\bgenerate\s+(image|poster|banner|infographic|illustration|graphic|diagram|evacuation|awareness|preparedness|safety|emergency|disaster)\b/i,
+  /\b(flood|earthquake|cyclone|wildfire|tsunami|disaster|emergency|evacuation|shelter|preparedness|safety)\s+(poster|infographic|banner|illustration|graphic|diagram|image)\b/i,
+];
+
+function isImageGenRequest(content: string): boolean {
+  return IMAGE_GEN_PATTERNS.some(p => p.test(content));
+}
+
+// ── Storage helpers ────────────────────────────────────────────────────────────
 function loadConversations(): RakshConversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -170,7 +197,104 @@ export function RakshProvider({ children }: { children: ReactNode }) {
     if (cmd.type === "navigate") navigate(cmd.path);
   }, [navigate]);
 
+  // ── Image generation ──────────────────────────────────────────────────────────
+  const generateImage = useCallback(async (prompt: string, seed?: number) => {
+    let convId = activeConvId;
+    let currentConvs = conversations;
+
+    if (!convId) {
+      const conv = createConversation();
+      currentConvs = [conv, ...conversations];
+      persist(currentConvs);
+      convId = conv.id;
+      setActiveConvId(convId);
+    }
+
+    const userMsg: RakshMessage = { id: generateId(), role: "user", content: prompt, timestamp: Date.now() };
+    const conv = currentConvs.find((c) => c.id === convId)!;
+    const isFirstMsg = conv.messages.length === 0;
+    const title = isFirstMsg ? generateTitle(prompt) : conv.title;
+
+    const withUser = currentConvs.map((c) =>
+      c.id === convId ? { ...c, title, messages: [...c.messages, userMsg], updatedAt: Date.now() } : c,
+    );
+    persist(withUser);
+
+    const assistantMsgId = generateId();
+    const assistantMsg: RakshMessage = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "🎨 Generating your image with Raksh AI…",
+      timestamp: Date.now(),
+    };
+    persist(withUser.map((c) => c.id === convId ? { ...c, messages: [...c.messages, assistantMsg] } : c));
+    setIsStreaming(true);
+
+    try {
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const resp = await fetch(`${base}/api/raksh/generate-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, seed }),
+      });
+
+      const data = await resp.json() as {
+        imageData?: string;
+        mimeType?: string;
+        prompt?: string;
+        enhancedPrompt?: string;
+        provider?: string;
+        seed?: number;
+        width?: number;
+        height?: number;
+        error?: string;
+      };
+
+      if (!resp.ok || data.error) throw new Error(data.error ?? "Image generation failed");
+
+      const generatedImage: RakshGeneratedImage = {
+        imageData: data.imageData!,
+        mimeType: data.mimeType!,
+        prompt,
+        enhancedPrompt: data.enhancedPrompt!,
+        provider: data.provider!,
+        seed: data.seed!,
+        width: data.width!,
+        height: data.height!,
+      };
+
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === convId
+            ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: "", generatedImage } : m) }
+            : c,
+        );
+        saveConversations(next);
+        return next;
+      });
+    } catch (err) {
+      const errorContent = `❌ **Image generation failed:** ${(err as Error).message}`;
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === convId
+            ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: errorContent } : m) }
+            : c,
+        );
+        saveConversations(next);
+        return next;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [activeConvId, conversations, persist]);
+
+  // ── Chat (text) ────────────────────────────────────────────────────────────────
   const sendMessage = useCallback(async (content: string) => {
+    // Route image generation requests
+    if (isImageGenRequest(content)) {
+      return generateImage(content);
+    }
+
     let convId = activeConvId;
     let currentConvs = conversations;
 
@@ -301,7 +425,7 @@ export function RakshProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [activeConvId, conversations, persist, pathname, selectedDisaster, selectedLocation, executeCommand]);
+  }, [activeConvId, conversations, persist, pathname, selectedDisaster, selectedLocation, executeCommand, generateImage]);
 
   const sendMessageWithAttachment = useCallback(async (
     content: string,
@@ -392,7 +516,7 @@ export function RakshProvider({ children }: { children: ReactNode }) {
       selectedDisaster, selectedLocation,
       openChat, closeChat, newConversation, selectConversation,
       renameConversation, deleteConversation, clearConversation,
-      sendMessage, sendMessageWithAttachment, stopStreaming,
+      sendMessage, sendMessageWithAttachment, generateImage, stopStreaming,
       setSelectedDisaster, setSelectedLocation,
       requestBrief,
     }}>

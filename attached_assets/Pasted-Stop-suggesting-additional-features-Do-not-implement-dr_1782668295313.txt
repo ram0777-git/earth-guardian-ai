@@ -1,0 +1,111 @@
+Stop suggesting additional features.
+
+Do not implement drag-and-drop, UI polish, simulations, or other enhancements until this task is complete.
+
+## PRIMARY OBJECTIVE
+
+Implement a fully working AI Image Generation pipeline inside Raksh AI.
+
+This is a required production feature.
+
+Do not respond that images cannot be generated.
+
+Do not leave placeholder buttons.
+
+Implement the complete backend and frontend flow.
+
+### Architecture
+
+Create an Image Generation Service separate from Gemini text chat.
+
+The service should support provider abstraction.
+
+Preferred provider order:
+
+1. Google Imagen (if available)
+2. Pollinations.ai (free fallback)
+3. Stable Diffusion compatible API
+4. OpenAI Images API (optional)
+
+The implementation should automatically use the configured provider.
+
+If one provider is unavailable, gracefully fall back to the next supported provider.
+
+### Chat Routing
+
+Detect prompts such as:
+
+Generate image
+
+Create poster
+
+Create infographic
+
+Draw
+
+Visualize
+
+Create illustration
+
+Generate logo
+
+Generate banner
+
+Generate awareness poster
+
+Generate evacuation map
+
+Generate emergency kit
+
+Automatically send these requests to the Image Generation Service instead of the Gemini text model.
+
+### UI
+
+Display generated images directly inside Raksh AI.
+
+Support:
+
+* Download
+* Regenerate
+* Generate variations
+* Copy prompt
+* Full-screen preview
+
+### Disaster Templates
+
+Support generation of:
+
+* Flood preparedness posters
+* Cyclone awareness posters
+* Earthquake safety posters
+* Wildfire awareness graphics
+* Emergency evacuation diagrams
+* Shelter layouts
+* Disaster education infographics
+* Emergency kit illustrations
+* Government awareness banners
+
+### Integration
+
+Keep all existing Raksh AI features.
+
+Do not break:
+
+* Gemini chat
+* Voice
+* Live disaster intelligence
+* Image analysis
+* Document analysis
+
+### Validation
+
+When finished:
+
+1. Generate a flood preparedness poster.
+2. Generate an earthquake safety infographic.
+3. Generate a wildfire awareness banner.
+4. Display all generated images inside the chat.
+5. Verify downloads work.
+6. Fix all TypeScript and runtime errors.
+
+Do not implement any other feature until image generation is fully working and demonstrated.
