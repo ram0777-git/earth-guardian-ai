@@ -1,0 +1,439 @@
+You are continuing development of Earth Guardian AI.
+
+IMPORTANT
+
+Read only the files necessary for this feature.
+
+Do NOT analyze the entire repository repeatedly.
+
+Do NOT redesign the application.
+
+Do NOT rewrite existing pages.
+
+Do NOT modify project architecture.
+
+Reuse existing APIs, UI components and application logic.
+
+Minimize token usage.
+
+Implement directly.
+
+=====================================================
+
+PROJECT GOAL
+
+Build the flagship feature:
+
+RAKSH AI
+
+Tagline:
+
+"Your AI Disaster Intelligence & Emergency Response Copilot"
+
+Raksh AI must feel like a premium AI assistant comparable in usability to ChatGPT or Gemini while being deeply integrated with Earth Guardian AI.
+
+The objective is to create the strongest hackathon feature in the project.
+
+=====================================================
+
+CORE EXPERIENCE
+
+Implement:
+
+• Floating AI assistant button visible on every page.
+
+• Dedicated Raksh AI page.
+
+• Beautiful modern interface.
+
+• Responsive design.
+
+• Glassmorphism UI matching Earth Guardian branding.
+
+• Conversation history.
+
+• Rename conversations.
+
+• Delete conversations.
+
+• Clear conversation.
+
+• Suggested prompts.
+
+• Markdown rendering.
+
+• Syntax highlighting.
+
+• Tables.
+
+• Bullet lists.
+
+• Typing animation.
+
+• Streaming responses if supported.
+
+• Copy response.
+
+• Regenerate response.
+
+• Auto scroll.
+
+• Keyboard shortcuts.
+
+=====================================================
+
+LLM INTEGRATION
+
+Design Raksh AI to work with a configurable LLM provider.
+
+Support environment variables for the provider and API key.
+
+Keep the implementation provider-agnostic where possible so different models can be swapped without major code changes.
+
+If no API key is configured, show a friendly setup message rather than failing.
+
+=====================================================
+
+APPLICATION CONTEXT
+
+Raksh AI automatically understands:
+
+Current page.
+
+Selected location.
+
+Selected disaster.
+
+Current weather.
+
+Current AI risk score.
+
+Preparedness checklist.
+
+Emergency planner state.
+
+User location (when permission is granted).
+
+Users should not need to repeat this information.
+
+=====================================================
+
+DISASTER INTELLIGENCE
+
+Raksh AI specializes in:
+
+Earthquakes.
+
+Floods.
+
+Cyclones.
+
+Wildfires.
+
+Landslides.
+
+Heatwaves.
+
+Storms.
+
+Tsunamis.
+
+Drought.
+
+Emergency preparedness.
+
+Climate awareness.
+
+Risk explanation.
+
+Whenever possible combine:
+
+Project data.
+
+Weather.
+
+Risk analysis.
+
+Historical events.
+
+Emergency resources.
+
+Then generate intelligent answers.
+
+Clearly distinguish:
+
+Live data.
+
+Historical information.
+
+AI guidance.
+
+Unavailable information.
+
+Never fabricate live information.
+
+=====================================================
+
+SMART ACTIONS
+
+Raksh AI can trigger application actions.
+
+Examples:
+
+Open Dashboard.
+
+Navigate to Live Map.
+
+Navigate to Risk Analysis.
+
+Open Emergency Planner.
+
+Search location.
+
+Center map.
+
+Highlight disaster.
+
+Generate preparedness checklist.
+
+Generate emergency kit.
+
+Generate evacuation plan.
+
+Generate summary report.
+
+=====================================================
+
+AI EXPLAIN
+
+Users can click:
+
+Charts.
+
+Risk scores.
+
+Predictions.
+
+Disaster events.
+
+Timeline entries.
+
+Map markers.
+
+Raksh AI explains:
+
+What it means.
+
+Why it matters.
+
+Confidence.
+
+Recommended actions.
+
+=====================================================
+
+LIVE MAP COPILOT
+
+Examples:
+
+"Show earthquakes near Hyderabad"
+
+Search the location.
+
+Center the map.
+
+Highlight nearby events.
+
+Summarize current risks.
+
+"Show flood-prone areas"
+
+Enable the appropriate overlays if available and explain the results.
+
+=====================================================
+
+PERSONAL PLANNING
+
+Generate:
+
+Family emergency plans.
+
+Travel emergency plans.
+
+Office evacuation plans.
+
+School emergency plans.
+
+Senior citizen plans.
+
+Child safety plans.
+
+Pet emergency plans.
+
+Medical emergency plans.
+
+Disaster survival kits.
+
+=====================================================
+
+DOCUMENT ASSISTANT
+
+Allow users to upload supported documents.
+
+Examples:
+
+PDF.
+
+DOCX.
+
+TXT.
+
+CSV.
+
+Provide:
+
+Summaries.
+
+Action items.
+
+Emergency recommendations.
+
+Risk extraction.
+
+If the configured model cannot analyze uploaded files directly, clearly explain the limitation.
+
+=====================================================
+
+VOICE
+
+Voice input.
+
+Speech-to-text.
+
+Optional text-to-speech.
+
+Microphone button.
+
+=====================================================
+
+EMERGENCY MODE
+
+If the user types:
+
+HELP
+
+SOS
+
+Emergency
+
+Fire
+
+Flood
+
+Earthquake
+
+Cyclone
+
+Accident
+
+Collapse
+
+Immediately switch to Emergency Mode.
+
+Show:
+
+Immediate safety steps.
+
+Emergency contacts.
+
+Nearby hospitals.
+
+Nearby shelters.
+
+Emergency kit reminder.
+
+=====================================================
+
+HACKATHON FEATURES
+
+1. AI Disaster Replay
+
+For historical disasters, generate a timeline showing:
+
+• how the event unfolded,
+
+• key decisions,
+
+• emergency response,
+
+• lessons learned.
+
+Label clearly as historical analysis.
+
+-----------------------------------------------------
+
+2. AI Scenario Simulator
+
+Users can ask:
+
+"What if a magnitude 7.8 earthquake hits Chennai?"
+
+Generate a clearly labeled hypothetical scenario including:
+
+• likely impacts,
+
+• emergency priorities,
+
+• preparedness recommendations.
+
+Do not present hypothetical scenarios as real predictions.
+
+-----------------------------------------------------
+
+3. Daily Disaster Brief
+
+Generate a concise summary of major current disaster events using available data.
+
+-----------------------------------------------------
+
+4. Preparedness Score Coach
+
+Explain why a preparedness score is high or low and recommend improvements.
+
+=====================================================
+
+QUALITY
+
+No runtime errors.
+
+No TypeScript errors.
+
+Responsive.
+
+Accessible.
+
+Professional loading states.
+
+Error handling.
+
+Performance optimized.
+
+=====================================================
+
+DELIVERABLES
+
+When finished provide only:
+
+1. Files modified.
+
+2. Components added.
+
+3. APIs integrated.
+
+4. Environment variables required.
+
+5. Manual setup steps.
+
+6. Build status.
+
+Do not spend tokens explaining implementation. Implement directly.

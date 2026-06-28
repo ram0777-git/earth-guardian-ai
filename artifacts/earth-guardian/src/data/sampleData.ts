@@ -21,6 +21,7 @@ export const navLinks = [
   { href: "/live-map", label: "Live Map" },
   { href: "/emergency-planner", label: "Emergency Planner" },
   { href: "/volunteer-network", label: "Volunteers" },
+  { href: "/raksh", label: "Raksh AI" },
   { href: "/about", label: "About" },
 ];
 

@@ -5,6 +5,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AppProviders } from "@/components/providers/AppProviders";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RakshProvider } from "@/components/raksh/RakshContext";
+import { RakshAIButton } from "@/components/raksh/RakshAIButton";
 
 const HomePage             = lazy(() => import("@/pages/HomePage"));
 const DashboardPage        = lazy(() => import("@/pages/DashboardPage"));
@@ -13,6 +15,7 @@ const LiveMapPage          = lazy(() => import("@/pages/LiveMapPage"));
 const EmergencyPlannerPage = lazy(() => import("@/pages/EmergencyPlannerPage"));
 const VolunteerNetworkPage = lazy(() => import("@/pages/VolunteerNetworkPage"));
 const AboutPage            = lazy(() => import("@/pages/AboutPage"));
+const RakshAIPage          = lazy(() => import("@/pages/RakshAIPage"));
 const NotFound             = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -47,6 +50,7 @@ function Router() {
         <Route path="/emergency-planner"  component={EmergencyPlannerPage} />
         <Route path="/volunteer-network"  component={VolunteerNetworkPage} />
         <Route path="/about"              component={AboutPage} />
+        <Route path="/raksh"              component={RakshAIPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -58,15 +62,18 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <ErrorBoundary>
-          <AppProviders>
-            <Navbar />
-            <main className="flex-1">
-              <ErrorBoundary>
-                <Router />
-              </ErrorBoundary>
-            </main>
-            <Footer />
-          </AppProviders>
+          <RakshProvider>
+            <AppProviders>
+              <Navbar />
+              <main className="flex-1">
+                <ErrorBoundary>
+                  <Router />
+                </ErrorBoundary>
+              </main>
+              <Footer />
+              <RakshAIButton />
+            </AppProviders>
+          </RakshProvider>
         </ErrorBoundary>
       </WouterRouter>
     </QueryClientProvider>
