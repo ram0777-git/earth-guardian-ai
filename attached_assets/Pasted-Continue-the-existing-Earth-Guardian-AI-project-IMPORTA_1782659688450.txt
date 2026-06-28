@@ -1,0 +1,288 @@
+Continue the existing Earth Guardian AI project.
+
+IMPORTANT
+
+DO NOT redesign Raksh AI.
+
+DO NOT recreate Gemini integration.
+
+DO NOT modify completed UI.
+
+DO NOT remove any existing functionality.
+
+Only upgrade Raksh AI into a REAL-TIME Disaster Intelligence Assistant.
+
+==================================================
+MISSION
+=======
+
+Raksh AI must never rely only on Gemini for time-sensitive questions.
+
+Gemini should be used ONLY for reasoning, explanation, summarization, recommendations, and natural language.
+
+ALL real-time information must come from live APIs first.
+
+==================================================
+INTENT DETECTION
+================
+
+Detect when the user asks about:
+
+today
+
+latest
+
+recent
+
+currently
+
+live
+
+this week
+
+right now
+
+breaking
+
+now
+
+current
+
+active
+
+ongoing
+
+or any equivalent wording.
+
+Examples:
+
+"What happened in Venezuela today?"
+
+"Latest earthquake in Japan"
+
+"Current floods in India"
+
+"Any cyclone today?"
+
+"Recent disasters near me"
+
+==================================================
+LIVE DATA SOURCES
+=================
+
+Before answering, query the appropriate live source.
+
+Use existing Earth Guardian APIs whenever available.
+
+Examples:
+
+• USGS Earthquake Feed
+• Weather APIs
+• Existing Disaster APIs
+• Existing Risk APIs
+• Existing Alert APIs
+
+Only if a required live source is not available should the architecture allow adding another provider later.
+
+==================================================
+AI PIPELINE
+===========
+
+User Question
+
+↓
+
+Intent Detection
+
+↓
+
+Is this asking for live information?
+
+↓
+
+YES
+
+↓
+
+Fetch live data
+
+↓
+
+Combine multiple sources if necessary
+
+↓
+
+Send structured live data into Gemini
+
+↓
+
+Gemini generates:
+
+Summary
+
+Risk explanation
+
+Preparedness advice
+
+Likely impact
+
+Safety recommendations
+
+Confidence level
+
+↓
+
+Return response
+
+==================================================
+ANSWER FORMAT
+=============
+
+For live questions return:
+
+Current Situation
+
+Latest Events
+
+Location
+
+Magnitude / Severity
+
+Time
+
+Source
+
+AI Analysis
+
+Recommended Actions
+
+Preparedness Advice
+
+Related Dashboard Links
+
+Open Live Map button
+
+==================================================
+DISASTER TYPES
+==============
+
+Support:
+
+Earthquakes
+
+Floods
+
+Cyclones
+
+Wildfires
+
+Heatwaves
+
+Storms
+
+Tsunamis
+
+Landslides
+
+Volcanoes
+
+Droughts
+
+Weather alerts
+
+==================================================
+SMART APPLICATION INTEGRATION
+=============================
+
+If the user asks:
+
+"Show it on map"
+
+Automatically navigate to Live Map.
+
+Zoom to event.
+
+Highlight marker.
+
+Open information panel.
+
+If the user asks:
+
+"Show dashboard"
+
+Navigate automatically.
+
+==================================================
+DATA RELIABILITY
+================
+
+Never fabricate live events.
+
+If no live data exists:
+
+Clearly state:
+
+"No recent verified events were found."
+
+Never guess.
+
+Never hallucinate.
+
+==================================================
+CACHING
+=======
+
+Cache live API responses for 2–5 minutes to reduce unnecessary requests and improve performance.
+
+==================================================
+ERROR HANDLING
+==============
+
+If a live API fails:
+
+Explain that live data is temporarily unavailable.
+
+Then optionally provide historical or general background information, clearly labeled as such.
+
+==================================================
+ARCHITECTURE
+============
+
+Create a Live Intelligence Service.
+
+All future live sources should plug into this service.
+
+Keep Gemini separate from data retrieval.
+
+==================================================
+TEST CASES
+==========
+
+Verify Raksh AI correctly answers:
+
+"What happened in Venezuela today?"
+
+"Latest earthquake in Japan"
+
+"Current floods in Bangladesh"
+
+"Active cyclones near India"
+
+"Recent wildfire in California"
+
+"Today's disaster brief"
+
+"Show current alerts"
+
+==================================================
+RETURN ONLY
+
+1. Files modified
+
+2. APIs connected
+
+3. New live capabilities
+
+4. Build status
+
+5. Remaining work
