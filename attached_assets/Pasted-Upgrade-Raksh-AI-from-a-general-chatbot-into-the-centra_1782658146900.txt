@@ -1,0 +1,162 @@
+Upgrade Raksh AI from a general chatbot into the central AI copilot for Earth Guardian AI.
+
+Do NOT redesign the UI.
+
+Keep Gemini integration.
+
+Keep streaming.
+
+Keep chat history.
+
+=================================================
+
+Raksh AI MUST use live application data before using Gemini knowledge.
+
+Whenever the user asks about:
+
+• today's disasters
+• earthquakes
+• floods
+• cyclones
+• weather
+• alerts
+• risk
+• emergency
+• map
+• dashboard
+
+Raksh should first call existing backend APIs and use project data.
+
+Use Gemini only to explain and summarize that data.
+
+=================================================
+
+Integrate Raksh AI with:
+
+• Live Disaster API
+• Dashboard statistics
+• Risk Analysis
+• Weather API
+• Emergency Planner
+• Timeline
+• Map markers
+• Alerts
+
+=================================================
+
+Create a "Daily Disaster Brief"
+
+The AI should automatically generate:
+
+- Today's disasters
+- Highest risk region
+- Largest earthquake
+- Flood alerts
+- Cyclone alerts
+- Weather warnings
+- AI summary
+- Recommended actions
+
+=================================================
+
+When a user clicks any disaster marker on the map:
+
+Raksh automatically knows which event is selected.
+
+If the user asks:
+
+"Explain this."
+
+Raksh explains:
+
+- Cause
+- Severity
+- Expected impact
+- Safety measures
+- AI prediction
+
+=================================================
+
+When the user asks:
+
+"Show disasters near Hyderabad"
+
+or
+
+"Flood risk near Tokyo"
+
+Raksh should:
+
+Search project data.
+
+Navigate the map.
+
+Zoom.
+
+Highlight results.
+
+Explain them.
+
+=================================================
+
+When the user asks:
+
+"Am I safe?"
+
+Raksh combines:
+
+Weather
+
+Risk score
+
+Nearby disasters
+
+AI prediction
+
+Preparedness
+
+and gives a personalized answer.
+
+=================================================
+
+Implement a command system:
+
+"Open Dashboard"
+
+"Open Live Map"
+
+"Generate Emergency Plan"
+
+"Generate Checklist"
+
+"Show Today's Alerts"
+
+"Explain Risk Score"
+
+=================================================
+
+Add proactive intelligence.
+
+If severe risk is detected in project data:
+
+Raksh automatically warns the user.
+
+=================================================
+
+No mock data.
+
+No fabricated live events.
+
+Always use backend APIs first.
+
+Gemini is only used for reasoning, explanation, recommendations and natural language.
+
+Return:
+
+1. Files modified
+
+2. APIs connected
+
+3. New AI capabilities
+
+4. Build status

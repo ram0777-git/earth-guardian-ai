@@ -14,21 +14,66 @@ import {
   ChevronLeft,
   Edit3,
   Zap,
+  Newspaper,
+  ArrowRight,
+  MapPin,
+  BarChart2,
+  ShieldAlert,
+  LayoutDashboard,
 } from "lucide-react";
+import type { RakshCommand } from "./RakshContext";
 import { useRaksh } from "./RakshContext";
 import { RakshMarkdown } from "./RakshMarkdown";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
-  "What's the current earthquake risk in my region?",
-  "Generate a family emergency preparedness plan",
-  "What if a magnitude 7.5 quake hits Mumbai?",
-  "Give me today's disaster brief",
-  "How do I build an emergency kit?",
-  "Explain cyclone preparedness steps",
-  "What are early warning signs of a landslide?",
-  "Create an evacuation plan for my office",
+  "📡 What disasters are active right now?",
+  "🌤️ What's the current weather and risk level?",
+  "⚠️ Show me all active alerts",
+  "🔮 What's the AI prediction for next 48 hours?",
+  "🛡️ Am I safe? Give me a full safety check",
+  "📋 Generate a family emergency preparedness plan",
+  "💥 What if a magnitude 7.5 quake hits Mumbai?",
+  "🚑 Create an evacuation plan for my office",
 ];
+
+const COMMAND_ICONS: Record<string, React.ReactNode> = {
+  "/dashboard":       <LayoutDashboard className="h-3 w-3" />,
+  "/live-map":        <MapPin className="h-3 w-3" />,
+  "/risk-analysis":   <BarChart2 className="h-3 w-3" />,
+  "/emergency-planner": <ShieldAlert className="h-3 w-3" />,
+};
+
+const COMMAND_LABELS: Record<string, string> = {
+  "/dashboard":       "Open Dashboard",
+  "/live-map":        "Open Live Map",
+  "/risk-analysis":   "Open Risk Analysis",
+  "/emergency-planner": "Open Emergency Planner",
+};
+
+function CommandButtons({ commands }: { commands: RakshCommand[] }) {
+  if (!commands.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {commands.map((cmd, i) => (
+        <a
+          key={i}
+          href={cmd.path}
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-cyan-300 transition-all"
+          style={{
+            background: "rgba(0,188,212,0.12)",
+            border: "1px solid rgba(0,188,212,0.25)",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,188,212,0.22)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,188,212,0.12)"; }}
+        >
+          {COMMAND_ICONS[cmd.path] ?? <ArrowRight className="h-3 w-3" />}
+          {COMMAND_LABELS[cmd.path] ?? cmd.path}
+        </a>
+      ))}
+    </div>
+  );
+}
 
 const EMERGENCY_KEYWORDS = /\b(help|sos|emergency|fire|flood|earthquake|cyclone|accident|collapse)\b/i;
 
@@ -65,6 +110,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     deleteConversation,
     clearConversation,
     activeConvId,
+    requestBrief,
   } = useRaksh();
 
   const [input, setInput] = useState("");
@@ -276,6 +322,17 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={requestBrief}
+              disabled={isStreaming}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-cyan-300 hover:text-white transition-colors disabled:opacity-40"
+              style={{ background: "rgba(0,188,212,0.10)", border: "1px solid rgba(0,188,212,0.2)" }}
+              title="Get today's Daily Disaster Brief"
+            >
+              <Newspaper className="h-3 w-3" />
+              {!compact && <span>Brief</span>}
+            </button>
             {!compact && (
               <button
                 type="button"
@@ -382,30 +439,36 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 )}
 
                 {msg.role === "assistant" && msg.content && (
-                  <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(msg.id, msg.content)}
-                      className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 flex items-center gap-1 transition-colors"
-                    >
-                      {copiedId === msg.id ? (
-                        <Check className="h-3 w-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
-                      {copiedId === msg.id ? "Copied" : "Copy"}
-                    </button>
-                    {idx === messages.length - 1 && canRegenerate && (
+                  <>
+                    {/* Command navigation buttons */}
+                    {msg.commands && msg.commands.length > 1 && (
+                      <CommandButtons commands={msg.commands} />
+                    )}
+                    <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
-                        onClick={handleRegenerate}
+                        onClick={() => handleCopy(msg.id, msg.content)}
                         className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 flex items-center gap-1 transition-colors"
                       >
-                        <RefreshCw className="h-3 w-3" />
-                        Regenerate
+                        {copiedId === msg.id ? (
+                          <Check className="h-3 w-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        {copiedId === msg.id ? "Copied" : "Copy"}
                       </button>
-                    )}
-                  </div>
+                      {idx === messages.length - 1 && canRegenerate && (
+                        <button
+                          type="button"
+                          onClick={handleRegenerate}
+                          className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 flex items-center gap-1 transition-colors"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
