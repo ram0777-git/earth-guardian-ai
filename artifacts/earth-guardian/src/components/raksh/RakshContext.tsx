@@ -263,6 +263,28 @@ export function RakshProvider({ children }: { children: ReactNode }) {
         height: data.height!,
       };
 
+      // Sync to image gallery
+      try {
+        const galleryKey = "raksh_image_gallery";
+        const existing = JSON.parse(localStorage.getItem(galleryKey) ?? "[]") as unknown[];
+        const newEntry = {
+          ...generatedImage,
+          id: generateId(),
+          createdAt: Date.now(),
+          category: (() => {
+            const p = prompt.toLowerCase();
+            if (/flood/.test(p)) return "Flood";
+            if (/earthquake|seismic/.test(p)) return "Earthquake";
+            if (/cyclone|hurricane|typhoon/.test(p)) return "Cyclone";
+            if (/wildfire|fire/.test(p)) return "Wildfire";
+            if (/tsunami/.test(p)) return "Tsunami";
+            if (/volcano|eruption/.test(p)) return "Volcano";
+            return "Emergency";
+          })(),
+        };
+        localStorage.setItem(galleryKey, JSON.stringify([newEntry, ...existing].slice(0, 100)));
+      } catch { /* ignore */ }
+
       setConversations((prev) => {
         const next = prev.map((c) =>
           c.id === convId

@@ -1,1 +1,2 @@
 - [Raksh AI architecture](raksh-ai.md) — multimodal Gemini AI chat; key env var is GEMINI_API_KEY; server must restart to pick up new secrets.
+- [Earth Guardian upgrade](earth-guardian-upgrade.md) — pages, routes, API endpoints, and nav added in the v2 upgrade session.

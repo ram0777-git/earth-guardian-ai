@@ -1,20 +1,20 @@
 import { motion } from "framer-motion";
-import { Map, Bell, FileText, Grid3x3, CalendarClock, Download, ArrowRight } from "lucide-react";
+import { Map, Bell, FileText, Zap, ImageIcon, BarChart2, ArrowRight, FileBarChart } from "lucide-react";
 import { Link } from "wouter";
 
 const actions = [
   {
-    icon: Map,           label: "View Live Map",      description: "Global event map",   href: "/live-map",            color: "#22d3ee",  bg: "rgba(34,211,238,0.10)",  border: "rgba(34,211,238,0.20)"  },
+    icon: Map,          label: "Live Map",         description: "Global event map",      href: "/live-map",        color: "#22d3ee",  bg: "rgba(34,211,238,0.10)",  border: "rgba(34,211,238,0.20)"  },
   {
-    icon: Bell,          label: "Send Alert",         description: "Notify regions",     href: "/emergency-planner",   color: "#ef4444",  bg: "rgba(239,68,68,0.10)",   border: "rgba(239,68,68,0.20)"   },
+    icon: Zap,          label: "Simulate",         description: "What-if scenarios",     href: "/simulation",      color: "#ef4444",  bg: "rgba(239,68,68,0.10)",   border: "rgba(239,68,68,0.20)"   },
   {
-    icon: FileText,      label: "Generate Report",    description: "AI risk analysis",   href: "/risk-analysis",       color: "#60a5fa",  bg: "rgba(96,165,250,0.10)",  border: "rgba(96,165,250,0.20)"  },
+    icon: FileBarChart, label: "Reports",          description: "Intelligence reports",  href: "/reports",         color: "#60a5fa",  bg: "rgba(96,165,250,0.10)",  border: "rgba(96,165,250,0.20)"  },
   {
-    icon: Grid3x3,       label: "Update Zones",       description: "Edit risk zones",    href: "/risk-analysis",       color: "#818cf8",  bg: "rgba(129,140,248,0.10)", border: "rgba(129,140,248,0.20)" },
+    icon: BarChart2,    label: "Risk Analysis",    description: "AI risk assessment",    href: "/risk-analysis",   color: "#818cf8",  bg: "rgba(129,140,248,0.10)", border: "rgba(129,140,248,0.20)" },
   {
-    icon: CalendarClock, label: "Schedule Drill",     description: "Community prep",     href: "/volunteer-network",   color: "#34d399",  bg: "rgba(52,211,153,0.10)",  border: "rgba(52,211,153,0.20)"  },
+    icon: ImageIcon,    label: "Image Gallery",    description: "AI-generated graphics", href: "/image-gallery",   color: "#a78bfa",  bg: "rgba(167,139,250,0.10)", border: "rgba(167,139,250,0.20)" },
   {
-    icon: Download,      label: "Export Data",        description: "Download reports",   href: "/dashboard",           color: "#fb923c",  bg: "rgba(251,146,60,0.10)",  border: "rgba(251,146,60,0.20)"  },
+    icon: FileText,     label: "Emergency Plan",   description: "Preparedness checklist",href: "/emergency-planner",color: "#34d399", bg: "rgba(52,211,153,0.10)",  border: "rgba(52,211,153,0.20)"  },
 ];
 
 export function QuickActions() {
@@ -25,7 +25,7 @@ export function QuickActions() {
     >
       <div className="mb-4">
         <h3 className="font-semibold text-white">Quick Actions</h3>
-        <p className="mt-0.5 text-xs text-slate-400">Common operations at a glance</p>
+        <p className="mt-0.5 text-xs text-slate-400">Access key features instantly</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -65,29 +65,29 @@ export function QuickActions() {
         })}
       </div>
 
-      {/* Emergency button */}
+      {/* Raksh AI button */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
         className="mt-4"
       >
-        <Link href="/emergency-planner">
+        <Link href="/raksh">
           <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex cursor-pointer items-center justify-between rounded-xl border border-red-400/25 bg-red-400/8 px-4 py-3 transition-all hover:bg-red-400/14 hover:border-red-400/40"
+            className="flex cursor-pointer items-center justify-between rounded-xl border border-cyan-400/25 bg-cyan-400/8 px-4 py-3 transition-all hover:bg-cyan-400/14 hover:border-cyan-400/40"
           >
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-red-400/20">
-                <Bell className="h-3.5 w-3.5 text-red-400" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-400/20">
+                <Bell className="h-3.5 w-3.5 text-cyan-400" />
               </div>
               <div>
-                <p className="text-xs font-bold text-red-400">Emergency Protocol</p>
-                <p className="text-[10px] text-slate-500">Activate response plan</p>
+                <p className="text-xs font-bold text-cyan-400">Open Raksh AI</p>
+                <p className="text-[10px] text-slate-500">Full AI copilot experience</p>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-red-400" />
+            <ArrowRight className="h-4 w-4 text-cyan-400" />
           </motion.div>
         </Link>
       </motion.div>

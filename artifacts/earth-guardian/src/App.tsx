@@ -8,15 +8,18 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RakshProvider } from "@/components/raksh/RakshContext";
 import { RakshAIButton } from "@/components/raksh/RakshAIButton";
 
-const HomePage             = lazy(() => import("@/pages/HomePage"));
-const DashboardPage        = lazy(() => import("@/pages/DashboardPage"));
-const RiskAnalysisPage     = lazy(() => import("@/pages/RiskAnalysisPage"));
-const LiveMapPage          = lazy(() => import("@/pages/LiveMapPage"));
-const EmergencyPlannerPage = lazy(() => import("@/pages/EmergencyPlannerPage"));
-const VolunteerNetworkPage = lazy(() => import("@/pages/VolunteerNetworkPage"));
-const AboutPage            = lazy(() => import("@/pages/AboutPage"));
-const RakshAIPage          = lazy(() => import("@/pages/RakshAIPage"));
-const NotFound             = lazy(() => import("@/pages/not-found"));
+const HomePage               = lazy(() => import("@/pages/HomePage"));
+const DashboardPage          = lazy(() => import("@/pages/DashboardPage"));
+const RiskAnalysisPage       = lazy(() => import("@/pages/RiskAnalysisPage"));
+const LiveMapPage            = lazy(() => import("@/pages/LiveMapPage"));
+const EmergencyPlannerPage   = lazy(() => import("@/pages/EmergencyPlannerPage"));
+const VolunteerNetworkPage   = lazy(() => import("@/pages/VolunteerNetworkPage"));
+const AboutPage              = lazy(() => import("@/pages/AboutPage"));
+const RakshAIPage            = lazy(() => import("@/pages/RakshAIPage"));
+const ImageGalleryPage       = lazy(() => import("@/pages/ImageGalleryPage"));
+const DisasterSimulationPage = lazy(() => import("@/pages/DisasterSimulationPage"));
+const ReportsPage            = lazy(() => import("@/pages/ReportsPage"));
+const NotFound               = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +54,9 @@ function Router() {
         <Route path="/volunteer-network"  component={VolunteerNetworkPage} />
         <Route path="/about"              component={AboutPage} />
         <Route path="/raksh"              component={RakshAIPage} />
+        <Route path="/image-gallery"      component={ImageGalleryPage} />
+        <Route path="/simulation"         component={DisasterSimulationPage} />
+        <Route path="/reports"            component={ReportsPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

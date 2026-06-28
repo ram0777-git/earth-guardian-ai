@@ -22,6 +22,41 @@ const DEFAULT_MODEL = "gemini-2.5-flash";
 const TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 2;
 
+// ── AI Provider Manager ────────────────────────────────────────────────────────
+interface ProviderStatus {
+  name: string;
+  available: boolean;
+  failedAt?: number;
+}
+
+const providerStatus: Record<string, ProviderStatus> = {
+  gemini:     { name: "Gemini", available: true },
+  openrouter: { name: "OpenRouter", available: true },
+  groq:       { name: "Groq", available: true },
+};
+
+function isProviderCooledDown(name: string): boolean {
+  const s = providerStatus[name];
+  if (!s) return false;
+  if (s.available) return true;
+  // 5 minute cooldown
+  if (s.failedAt && Date.now() - s.failedAt > 5 * 60_000) {
+    s.available = true;
+    s.failedAt = undefined;
+    return true;
+  }
+  return false;
+}
+
+function markProviderFailed(name: string) {
+  const s = providerStatus[name];
+  if (s) { s.available = false; s.failedAt = Date.now(); }
+}
+
+function isRetryableError(msg: string): boolean {
+  return /429|500|503|overloaded|timeout|quota|exceeded|UNAVAILABLE|rate.limit/i.test(msg);
+}
+
 function getGeminiClient(): { genAI: GoogleGenerativeAI; model: string } | null {
   const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) return null;
@@ -63,6 +98,8 @@ NAVIGATION COMMANDS — when user asks to navigate, append at the END:
 <raksh-command>{"type":"navigate","path":"/live-map"}</raksh-command>
 <raksh-command>{"type":"navigate","path":"/risk-analysis"}</raksh-command>
 <raksh-command>{"type":"navigate","path":"/emergency-planner"}</raksh-command>
+<raksh-command>{"type":"navigate","path":"/simulation"}</raksh-command>
+<raksh-command>{"type":"navigate","path":"/image-gallery"}</raksh-command>
 
 DISASTER SIMULATION MODE — triggered by: "what if", "scenario", "simulate", "hypothetical", "suppose", "imagine":
 Use this EXACT format:
@@ -100,6 +137,17 @@ Use this format:
 ### 🚗 Transportation & Logistics
 ### 📋 72-Hour Deployment Timeline
 ### 💡 Optimization Recommendations
+
+EMERGENCY COPILOT MODE — triggered by: "my family", "shelter near", "hospital", "evacuate", "safe route", "first aid", "survival kit", "emergency contacts":
+Respond with:
+## 🛡️ Emergency Copilot — [Situation]
+### 👨‍👩‍👧 Family Emergency Plan
+### 🏥 Nearest Medical Resources
+### 🏠 Shelter Options
+### 🛣️ Safe Evacuation Routes
+### 📞 Emergency Contacts
+### 🎒 Survival Kit Checklist
+### ⚕️ First Aid Guidance
 
 TONE: Professional, calm, authoritative. Always be honest about data limitations.`;
 
@@ -145,17 +193,15 @@ const KNOWN_LOCATIONS: string[] = [
   "mumbai", "delhi", "tokyo", "beijing", "jakarta", "dhaka", "kathmandu",
   "pacific", "atlantic", "gulf", "caribbean", "himalaya", "ring of fire",
   "south asia", "southeast asia", "central america", "latin america",
+  "chennai", "chennai", "tokyo", "osaka", "kyoto", "manila", "hanoi",
+  "bangalore", "hyderabad", "kolkata", "ahmedabad", "surat", "pune",
 ];
 
 function extractLocation(message: string): string | null {
   const lower = message.toLowerCase();
-
-  // Check known locations
   for (const loc of KNOWN_LOCATIONS) {
     if (lower.includes(loc)) return loc;
   }
-
-  // Pattern: "in [Location]" or "near [Location]" or "at [Location]"
   const prepositionMatch = lower.match(/\b(?:in|near|at|around|from|for)\s+([a-z][a-z\s]{2,25}?)(?:\?|,|\.|$|\b(?:today|now|recently|this))/);
   if (prepositionMatch) {
     const candidate = prepositionMatch[1].trim();
@@ -163,7 +209,6 @@ function extractLocation(message: string): string | null {
       return candidate;
     }
   }
-
   return null;
 }
 
@@ -173,7 +218,6 @@ function detectIntent(message: string): IntentResult {
   const appIntents = new Set<AppIntent>();
   const liveIntents = new Set<LiveIntent>();
 
-  // App intents
   if (/\b(disaster|earthquake|flood|cyclone|wildfire|fire|tsunami|landslide|heatwave|storm|drought|hurricane|volcano)\b/.test(m)) appIntents.add("disasters");
   if (/\b(weather|temperature|rain|wind|humidity|forecast|condition)\b/.test(m)) appIntents.add("weather");
   if (/\b(risk|score|danger|threat|safe|safety|vulnerable)\b/.test(m)) appIntents.add("risk");
@@ -182,9 +226,8 @@ function detectIntent(message: string): IntentResult {
   if (/\b(timeline|history|recent|latest|happened|event)\b/.test(m)) appIntents.add("timeline");
   if (/\b(am i safe|are we safe|should i evacuate|safe to stay|danger near me)\b/.test(m)) appIntents.add("safety_check");
   if (/\b(brief|daily|summary|overview|today|whats happening|what.s happening)\b/.test(m)) appIntents.add("brief");
-  if (/\b(open|go to|show|navigate|take me|dashboard|live map|risk analysis|emergency planner)\b/.test(m)) appIntents.add("navigate");
+  if (/\b(open|go to|show|navigate|take me|dashboard|live map|risk analysis|emergency planner|simulation|image gallery)\b/.test(m)) appIntents.add("navigate");
 
-  // Live intents (maps to external API sources)
   if (/\b(earthquake|quake|seismic|tremor|aftershock)\b/.test(m)) liveIntents.add("earthquake");
   if (/\b(flood|flooding|inundation|submerged|deluge)\b/.test(m)) liveIntents.add("flood");
   if (/\b(cyclone|hurricane|typhoon|tropical storm)\b/.test(m)) liveIntents.add("cyclone");
@@ -199,14 +242,10 @@ function detectIntent(message: string): IntentResult {
   if (/\b(brief|daily brief|situation|happening)\b/.test(m)) liveIntents.add("brief");
 
   const temporal = isTemporalQuery(message);
-
-  // If temporal + disaster type, always include "live" intent
   if (temporal && (liveIntents.size > 0 || appIntents.has("brief") || appIntents.has("disasters"))) {
     liveIntents.add("live");
   }
-  // Brief always fetches live
   if (appIntents.has("brief")) liveIntents.add("live");
-
   if (appIntents.size === 0) appIntents.add("general");
 
   return {
@@ -277,7 +316,6 @@ async function buildSystemInstruction(
 ): Promise<{ instruction: string; usedLiveIntelligence: boolean }> {
   let instruction = BASE_SYSTEM_PROMPT;
 
-  // App context
   if (ctx) {
     const lines: string[] = [];
     if (ctx.currentPage) lines.push(`Current page: ${ctx.currentPage}`);
@@ -288,16 +326,13 @@ async function buildSystemInstruction(
     }
   }
 
-  // Proactive critical warning from app data
   const criticalEvents = disasters.filter(d => d.severity === "critical");
   if (criticalEvents.length > 0) {
     instruction += `\n\n## ⚠️ CRITICAL EVENTS ACTIVE\n${criticalEvents.length} CRITICAL events: ${criticalEvents.map(e => e.name).join(", ")}`;
   }
 
-  // App data context
   instruction += buildAppDataContext(intent.appIntents);
 
-  // Real-time external intelligence
   let usedLiveIntelligence = false;
   if (intent.liveIntents.size > 0) {
     try {
@@ -355,6 +390,60 @@ function getGeminiModel(
   });
 }
 
+// ── OpenRouter fallback ───────────────────────────────────────────────────────
+async function callOpenRouter(systemInstruction: string, userMessage: string): Promise<string> {
+  const apiKey = process.env["OPENROUTER_API_KEY"];
+  if (!apiKey) throw new Error("OpenRouter not configured");
+
+  const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://earthguardian.ai",
+      "X-Title": "Earth Guardian AI",
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: userMessage },
+      ],
+      max_tokens: 4096,
+    }),
+  }), TIMEOUT_MS);
+
+  if (!resp.ok) throw new Error(`OpenRouter ${resp.status}`);
+  const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+// ── Groq fallback ─────────────────────────────────────────────────────────────
+async function callGroq(systemInstruction: string, userMessage: string): Promise<string> {
+  const apiKey = process.env["GROQ_API_KEY"];
+  if (!apiKey) throw new Error("Groq not configured");
+
+  const resp = await withTimeout(fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: userMessage },
+      ],
+      max_tokens: 4096,
+    }),
+  }), TIMEOUT_MS);
+
+  if (!resp.ok) throw new Error(`Groq ${resp.status}`);
+  const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
 // ── Route: live intelligence status ──────────────────────────────────────────
 router.get("/raksh/intelligence/status", async (_req, res) => {
   try {
@@ -405,11 +494,9 @@ router.get("/raksh/brief", async (_req, res) => {
   }
 
   try {
-    // Fetch all live data in parallel
     const liveData = await withTimeout(fetchLiveIntelligence(), 20_000);
     const liveCtx = buildLiveIntelligenceContext(liveData);
     const appCtx = buildAppDataContext(new Set<AppIntent>(["disasters", "alerts", "weather", "risk", "predictions", "timeline"]));
-
     const systemInstruction = BASE_SYSTEM_PROMPT + appCtx + liveCtx;
 
     const today = new Date().toLocaleDateString("en-US", {
@@ -454,7 +541,18 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
 // ── Route: Gemini status ──────────────────────────────────────────────────────
 router.get("/raksh/status", (_req, res) => {
   const gemini = getGeminiClient();
-  res.json({ ok: !!gemini, model: gemini?.model ?? null, timestamp: Date.now() });
+  const hasOpenRouter = !!process.env["OPENROUTER_API_KEY"];
+  const hasGroq = !!process.env["GROQ_API_KEY"];
+  res.json({
+    ok: !!gemini,
+    model: gemini?.model ?? null,
+    timestamp: Date.now(),
+    providers: {
+      gemini: { available: !!gemini, status: providerStatus["gemini"] },
+      openrouter: { available: hasOpenRouter, status: providerStatus["openrouter"] },
+      groq: { available: hasGroq, status: providerStatus["groq"] },
+    },
+  });
 });
 
 // ── Route: Image analysis via Gemini Vision ───────────────────────────────────
@@ -553,7 +651,7 @@ router.post("/raksh/analyze-document", async (req, res) => {
   }
 });
 
-// ── Route: Main chat ──────────────────────────────────────────────────────────
+// ── Route: Main chat with multi-provider fallback ─────────────────────────────
 router.post("/raksh/chat", async (req, res) => {
   const { messages, context } = req.body as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -565,69 +663,96 @@ router.post("/raksh/chat", async (req, res) => {
     return;
   }
 
-  const gemini = getGeminiClient();
-  if (!gemini) {
-    const keyPresent = !!process.env["GEMINI_API_KEY"];
-    console.error(`[Raksh] getGeminiClient() returned null. GEMINI_API_KEY present: ${keyPresent}`);
-    res.status(503).json({
-      error: keyPresent
-        ? "Gemini client failed to initialize despite key being present — check server logs."
-        : "GEMINI_API_KEY is not set in environment. Add it to Replit Secrets and restart the server.",
-    });
-    return;
-  }
-
   const lastMessage = messages[messages.length - 1];
   const intent = detectIntent(lastMessage.content);
-
-  // Build system instruction (fetches live data if needed)
   const { instruction: systemInstruction } = await buildSystemInstruction(intent, context);
-  const history = toGeminiHistory(messages);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  let attempt = 0;
-  while (attempt <= MAX_RETRIES) {
-    try {
-      const model = getGeminiModel(gemini, systemInstruction);
-      const chat = model.startChat({ history });
-      const streamResult = await withTimeout(
-        chat.sendMessageStream(lastMessage.content),
-        TIMEOUT_MS,
-      );
+  // ── Try Gemini first ──────────────────────────────────────────────────────
+  const gemini = getGeminiClient();
+  if (gemini && isProviderCooledDown("gemini")) {
+    let attempt = 0;
+    let geminiSucceeded = false;
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const history = toGeminiHistory(messages);
+        const model = getGeminiModel(gemini, systemInstruction);
+        const chat = model.startChat({ history });
+        const streamResult = await withTimeout(
+          chat.sendMessageStream(lastMessage.content),
+          TIMEOUT_MS,
+        );
 
-      for await (const chunk of streamResult.stream) {
-        const text = chunk.text();
-        if (text) {
-          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        for await (const chunk of streamResult.stream) {
+          const text = chunk.text();
+          if (text) {
+            res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+          }
         }
-      }
-      res.write("data: [DONE]\n\n");
-      res.end();
-      return;
-    } catch (err: unknown) {
-      attempt++;
-      const message = err instanceof Error ? err.message : "Gemini request failed";
-      const isRetryable = /503|overloaded|timeout|UNAVAILABLE/i.test(message);
-      if (isRetryable && attempt <= MAX_RETRIES) {
-        await new Promise(r => setTimeout(r, 1000 * attempt));
-        continue;
-      }
-      if (!res.headersSent) {
-        res.status(500).json({ error: message });
-      } else {
-        res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+        res.write("data: [DONE]\n\n");
         res.end();
+        geminiSucceeded = true;
+        return;
+      } catch (err: unknown) {
+        attempt++;
+        const message = err instanceof Error ? err.message : "Gemini request failed";
+        const retryable = isRetryableError(message);
+        if (retryable && attempt <= MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+          continue;
+        }
+        if (retryable) markProviderFailed("gemini");
+        break;
       }
-      return;
+    }
+    if (geminiSucceeded) return;
+  }
+
+  // ── Fallback: notify user then try OpenRouter / Groq ─────────────────────
+  res.write(`data: ${JSON.stringify({ content: "Primary AI is temporarily unavailable. Switching to backup AI...\n\n" })}\n\n`);
+
+  // Try OpenRouter
+  if (isProviderCooledDown("openrouter") && process.env["OPENROUTER_API_KEY"]) {
+    try {
+      const text = await callOpenRouter(systemInstruction, lastMessage.content);
+      if (text) {
+        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (isRetryableError(msg)) markProviderFailed("openrouter");
     }
   }
+
+  // Try Groq
+  if (isProviderCooledDown("groq") && process.env["GROQ_API_KEY"]) {
+    try {
+      const text = await callGroq(systemInstruction, lastMessage.content);
+      if (text) {
+        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (isRetryableError(msg)) markProviderFailed("groq");
+    }
+  }
+
+  // All providers failed
+  res.write(`data: ${JSON.stringify({ error: "All AI providers are temporarily unavailable. Please try again in a moment." })}\n\n`);
+  res.end();
 });
 
-// ── Route: AI Image Generation ───────────────────────────────────────────────
+// ── Route: AI Image Generation with fallback ──────────────────────────────────
 router.post("/raksh/generate-image", async (req, res) => {
   const {
     prompt,
@@ -646,7 +771,6 @@ router.post("/raksh/generate-image", async (req, res) => {
     return;
   }
 
-  // Detect image orientation from prompt
   const isPortrait = /poster|infographic|flyer|guide|vertical|tall/i.test(prompt);
   const isLandscape = /banner|wide|horizontal|landscape/i.test(prompt);
   const width = reqWidth ?? (isLandscape ? 1216 : isPortrait ? 832 : 1024);
@@ -680,7 +804,7 @@ Guidelines:
 
   const finalPrompt = `${enhancedPrompt}, ultra detailed, professional quality, 4k`;
 
-  // Fetch from Pollinations.ai (free, CORS-enabled, no key needed)
+  // Try Pollinations/Flux (primary)
   const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
   try {
@@ -694,7 +818,7 @@ Guidelines:
     clearTimeout(timer);
 
     if (!imageResp.ok) {
-      throw new Error(`Image service returned ${imageResp.status}`);
+      throw new Error(`Pollinations returned ${imageResp.status}`);
     }
 
     const contentType = (imageResp.headers.get("content-type") ?? "image/jpeg").split(";")[0]!;
@@ -717,6 +841,75 @@ Guidelines:
   }
 });
 
+// ── Route: Disaster Simulation ────────────────────────────────────────────────
+router.post("/raksh/simulate", async (req, res) => {
+  const { disasterType, magnitude, location, population } = req.body as {
+    disasterType: string;
+    magnitude: string;
+    location: string;
+    population?: number;
+  };
+
+  if (!disasterType || !location) {
+    res.status(400).json({ error: "disasterType and location are required" });
+    return;
+  }
+
+  const gemini = getGeminiClient();
+  if (!gemini) {
+    res.status(503).json({ error: "Gemini not configured" });
+    return;
+  }
+
+  const populationCtx = population ? ` (estimated population: ${population.toLocaleString()})` : "";
+
+  const prompt = `You are Raksh AI conducting a disaster simulation. Generate a comprehensive, realistic simulation report.
+
+SCENARIO: ${magnitude} ${disasterType} striking ${location}${populationCtx}
+
+Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
+{
+  "title": "string — full scenario title",
+  "overview": "string — 3-4 sentence scenario overview",
+  "riskScore": number (0-100),
+  "affectedPopulation": number,
+  "potentialCasualties": { "low": number, "high": number },
+  "economicImpact": "string — USD estimate with context",
+  "displacement": number,
+  "infrastructure": "string — description of infrastructure damage",
+  "timeline": [
+    { "hour": number, "event": "string", "severity": "low|moderate|high|critical" }
+  ],
+  "resources": [
+    { "type": "string", "quantity": number, "unit": "string", "priority": "immediate|high|medium|low" }
+  ],
+  "immediateActions": ["string", "string", "string", "string", "string"],
+  "actionPlan48h": ["string", "string", "string", "string"],
+  "evacuationZones": ["string", "string", "string"],
+  "keyRisks": ["string", "string", "string"],
+  "responseAgencies": ["string", "string", "string"]
+}
+
+Make the timeline have 8-12 entries covering 0-72 hours.
+Make resources have 8-10 entries.
+Be specific and realistic based on the location and disaster type.`;
+
+  try {
+    const model = getGeminiModel(gemini, BASE_SYSTEM_PROMPT);
+    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
+    const text = result.response.text().trim();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Invalid simulation response");
+
+    const data = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+    res.json({ simulation: data, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("[Raksh] Simulation error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Simulation failed" });
+  }
+});
+
 // ── Route: Comprehensive Intelligence Report ──────────────────────────────────
 router.post("/raksh/generate-report", async (req, res) => {
   const gemini = getGeminiClient();
@@ -725,10 +918,11 @@ router.post("/raksh/generate-report", async (req, res) => {
     return;
   }
 
-  const { location, focusArea, userContext } = req.body as {
+  const { location, focusArea, userContext, format } = req.body as {
     location?: string;
     focusArea?: string;
     userContext?: string;
+    format?: "markdown" | "html";
   };
 
   try {
@@ -822,6 +1016,7 @@ Be specific and data-driven. Use actual event names, magnitudes, and locations f
 
     res.json({
       content: report,
+      format: format ?? "markdown",
       generatedAt: now.toISOString(),
       meta: {
         fetchedAt: liveData.fetchedAt,

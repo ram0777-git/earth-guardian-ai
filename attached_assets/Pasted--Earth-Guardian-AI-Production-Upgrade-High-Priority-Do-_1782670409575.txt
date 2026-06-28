@@ -1,0 +1,367 @@
+# Earth Guardian AI — Production Upgrade (High Priority)
+
+Do not explain your plan. Do not ask for confirmation. Implement everything below until complete.
+
+The application already includes:
+
+* Live disaster intelligence
+* Raksh AI (Gemini)
+* Voice input/output
+* Live NOAA, USGS, GDACS integration
+* Image analysis
+* Document analysis
+* Image generation using Pollinations
+* Multilingual support
+* Emergency planner
+* Risk analysis
+* Live map
+
+Now upgrade the system into a production-quality multimodal AI platform.
+
+---
+
+## 1. AI Provider Architecture
+
+Implement a provider manager.
+
+Priority order:
+
+Text Intelligence
+
+1. Gemini
+2. OpenRouter
+3. Groq
+
+Image Generation
+
+1. Pollinations/Flux
+2. Stability AI
+3. OpenAI Images
+
+If any provider returns:
+
+* 429
+* 500
+* 503
+* timeout
+* quota exceeded
+* network failure
+
+Automatically switch to the next provider.
+
+Never expose API errors to users.
+
+Instead display:
+
+"Primary AI is temporarily unavailable. Switching to backup AI..."
+
+The switch must happen automatically.
+
+---
+
+## 2. Image Generation
+
+Upgrade the image generator.
+
+Support:
+
+* disaster posters
+* awareness banners
+* evacuation diagrams
+* emergency kit illustrations
+* flood simulation images
+* cyclone visualizations
+* wildfire scenes
+* tsunami illustrations
+* earthquake safety infographics
+* government awareness graphics
+
+Support:
+
+* Download
+* Fullscreen
+* Regenerate
+* Variations
+* Copy Prompt
+* High Resolution
+
+Store generated images in local history.
+
+Add an Image Gallery page with:
+
+* search
+* filters
+* disaster type
+* download all
+* delete
+* favorites
+
+---
+
+## 3. Professional Report Generation
+
+Generate:
+
+PDF
+
+DOCX
+
+PPTX
+
+Markdown
+
+Emergency reports
+
+Government reports
+
+NGO reports
+
+Situation reports
+
+Damage assessment
+
+Preparedness plans
+
+Evacuation plans
+
+Risk assessment
+
+Every report must contain:
+
+Executive Summary
+
+Charts
+
+Tables
+
+Maps
+
+Recommendations
+
+Preparedness checklist
+
+Sources
+
+Timestamp
+
+Earth Guardian branding
+
+One-click Download.
+
+---
+
+## 4. Voice Assistant
+
+Upgrade Raksh Voice.
+
+Support:
+
+Continuous conversation
+
+Wake phrase
+
+Stop speaking
+
+Interrupt while talking
+
+Speech-to-text
+
+Text-to-speech
+
+Auto language detection
+
+Conversation memory
+
+Natural pauses
+
+Streaming response
+
+Support 100+ languages.
+
+---
+
+## 5. Image Understanding
+
+Allow users to upload:
+
+satellite images
+
+drone images
+
+flood photos
+
+earthquake damage
+
+fire scenes
+
+landslides
+
+cyclones
+
+Gemini Vision should identify:
+
+damage level
+
+disaster type
+
+estimated severity
+
+recommended response
+
+Generate downloadable report.
+
+---
+
+## 6. Disaster Simulation
+
+Create an interactive simulator.
+
+Examples:
+
+"What if Category 5 cyclone hits Chennai?"
+
+"What if M8 earthquake hits Tokyo?"
+
+"What if tsunami strikes Indonesia?"
+
+Generate:
+
+timeline
+
+casualties estimate
+
+affected population
+
+economic impact
+
+evacuation timeline
+
+resource requirements
+
+response plan
+
+Display:
+
+animated charts
+
+risk gauges
+
+timelines
+
+maps
+
+progress bars
+
+---
+
+## 7. Emergency Copilot
+
+Raksh AI should become an operational emergency assistant.
+
+Support:
+
+family emergency plans
+
+hospital recommendations
+
+nearest shelters
+
+safe evacuation routes
+
+emergency contacts
+
+first aid
+
+survival kits
+
+live warnings
+
+weather alerts
+
+government advisories
+
+---
+
+## 8. Live Dashboard
+
+Real-time widgets:
+
+Earthquakes
+
+Floods
+
+Wildfires
+
+Cyclones
+
+Volcanoes
+
+Weather
+
+Air Quality
+
+Population at Risk
+
+Emergency Alerts
+
+Auto-refresh.
+
+---
+
+## 9. Performance
+
+Lazy loading
+
+Image optimization
+
+Caching
+
+Streaming AI responses
+
+Background fetch
+
+Offline support
+
+PWA
+
+Zero TypeScript errors.
+
+---
+
+## 10. UI
+
+Professional animations.
+
+Glassmorphism.
+
+Framer Motion transitions.
+
+Responsive desktop/tablet/mobile.
+
+Modern AI chat experience comparable to ChatGPT.
+
+Dark/Light mode.
+
+Smooth loading states.
+
+Beautiful charts.
+
+Professional icons.
+
+---
+
+## 11. Final Validation
+
+Verify every feature.
+
+Run the application.
+
+Fix all runtime issues.
+
+Fix all TypeScript issues.
+
+Ensure there are no placeholder implementations.
+
+The application should be fully functional, production-ready, visually impressive, and stable.
+
+Do not stop until all requested features are implemented and tested.
