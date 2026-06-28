@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { motion, AnimatePresence } from "framer-motion";
@@ -62,6 +62,42 @@ function createMarkerIcon(event: DisasterEvent): L.DivIcon {
   });
 }
 
+/* ── Clustering helpers ──────────────────────────────────── */
+
+type ClusterItem =
+  | DisasterEvent
+  | { isCluster: true; count: number; lat: number; lng: number; id: string; maxSeverity: string };
+
+function clusterEvents(events: DisasterEvent[], zoom: number): ClusterItem[] {
+  if (zoom >= 4) return events;
+  const gridSize = zoom <= 2 ? 15 : 8;
+  const cells = new Map<string, DisasterEvent[]>();
+  events.forEach(e => {
+    const key = `${Math.round(e.lat / gridSize)},${Math.round(e.lng / gridSize)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key)!.push(e);
+  });
+  const sevOrder = ["critical", "high", "moderate", "low"];
+  return Array.from(cells.entries()).map(([key, group]) => {
+    if (group.length === 1) return group[0];
+    const lat = group.reduce((s, e) => s + e.lat, 0) / group.length;
+    const lng = group.reduce((s, e) => s + e.lng, 0) / group.length;
+    const maxSeverity = sevOrder.find(s => group.some(e => e.severity === s)) ?? "low";
+    return { isCluster: true as const, count: group.length, lat, lng, id: `cluster-${key}`, maxSeverity };
+  });
+}
+
+function createClusterIcon(count: number, maxSeverity: string): L.DivIcon {
+  const color = SEV_COLOR[maxSeverity] ?? "#60a5fa";
+  const size = count > 50 ? 44 : count > 20 ? 36 : count > 5 ? 30 : 24;
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color}1A;border:2.5px solid ${color};display:flex;align-items:center;justify-content:center;font-size:${size > 34 ? 13 : 11}px;font-weight:800;color:${color};box-shadow:0 0 ${Math.round(size / 2)}px ${color}60,0 2px 8px rgba(0,0,0,0.6);">${count}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 /* ── Map sub-components ──────────────────────────────────── */
 
 function MapController({ target }: { target: [number, number] | null }) {
@@ -69,6 +105,58 @@ function MapController({ target }: { target: [number, number] | null }) {
   useEffect(() => {
     if (target) map.flyTo(target, 7, { duration: 1.5, easeLinearity: 0.3 });
   }, [target, map]);
+  return null;
+}
+
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMapEvents({ zoom: () => onZoom(map.getZoom()) });
+  useEffect(() => { onZoom(map.getZoom()); }, [map, onZoom]);
+  return null;
+}
+
+function HeatmapLayer({ events }: { events: DisasterEvent[] }) {
+  const map = useMap();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = L.DomUtil.create("canvas", "") as HTMLCanvasElement;
+    canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;z-index:300;";
+    const pane = map.getPanes().overlayPane as HTMLElement;
+    pane.appendChild(canvas);
+    canvasRef.current = canvas;
+
+    function draw() {
+      const size = map.getSize();
+      canvas.width = size.x;
+      canvas.height = size.y;
+      const ctx = canvas.getContext("2d")!;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      events.forEach(event => {
+        const pt = map.latLngToContainerPoint([event.lat, event.lng]);
+        const r = 55;
+        const alpha = event.severity === "critical" ? 0.55 : event.severity === "high" ? 0.38 : event.severity === "moderate" ? 0.25 : 0.15;
+        const color = event.severity === "critical" ? "239,68,68" : event.severity === "high" ? "249,115,22" : event.severity === "moderate" ? "245,158,11" : "52,211,153";
+        const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r);
+        g.addColorStop(0, `rgba(${color},${alpha})`);
+        g.addColorStop(0.5, `rgba(${color},${alpha * 0.4})`);
+        g.addColorStop(1, `rgba(${color},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    draw();
+    map.on("move zoom resize", draw);
+    return () => {
+      map.off("move zoom resize", draw);
+      if (canvasRef.current && pane.contains(canvasRef.current)) {
+        pane.removeChild(canvasRef.current);
+      }
+    };
+  }, [map, events]);
+
   return null;
 }
 
@@ -116,6 +204,9 @@ export function LiveDisasterMap() {
   const [searchTarget, setSearchTarget] = useState<[number, number] | null>(null);
   const [lastUpdated, setLastUpdated]   = useState<Date>(new Date());
   const [activeLayer, setActiveLayer]   = useState("dark");
+  const [showHeatmap, setShowHeatmap]   = useState(false);
+  const [mapZoom, setMapZoom]           = useState(2);
+  const [nextRefresh, setNextRefresh]   = useState(30);
 
   /* Inject CSS */
   useEffect(() => {
@@ -175,8 +266,23 @@ export function LiveDisasterMap() {
     return () => clearTimeout(t);
   }, [fetchUSGS]);
 
+  /* Auto-refresh every 30 s */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNextRefresh(prev => {
+        if (prev <= 1) {
+          fetchUSGS();
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [fetchUSGS]);
+
   const handleRefresh = () => {
     setRefreshing(true);
+    setNextRefresh(30);
     fetchUSGS().then(() => setRefreshing(false));
   };
 
@@ -377,6 +483,30 @@ export function LiveDisasterMap() {
                 </div>
               </div>
 
+              {/* Heatmap & clustering */}
+              <div>
+                <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  Overlays
+                </p>
+                <button
+                  onClick={() => setShowHeatmap(v => !v)}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs transition-all border ${
+                    showHeatmap
+                      ? "border-orange-400/40 bg-orange-400/10 text-white"
+                      : "border-white/8 text-slate-400 hover:bg-white/4"
+                  }`}
+                >
+                  <span className="text-base">🔥</span>
+                  <span className="flex-1 text-left">Heat Map</span>
+                  <span className={`h-4 w-7 rounded-full transition-colors ${showHeatmap ? "bg-orange-400" : "bg-white/10"} relative`}>
+                    <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${showHeatmap ? "left-3.5" : "left-0.5"}`} />
+                  </span>
+                </button>
+                <p className="mt-2 text-[10px] text-slate-600 leading-relaxed">
+                  Cluster markers auto-group when zoomed out.
+                </p>
+              </div>
+
               {/* Reset */}
               <button
                 onClick={() => { setActiveTypes(new Set(Object.keys(DISASTER_TYPE_CONFIG))); setSeverity("all"); }}
@@ -399,6 +529,10 @@ export function LiveDisasterMap() {
               <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                 <Clock className="h-3 w-3" />
                 Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                <RefreshCw className="h-3 w-3" />
+                Auto-refresh in {nextRefresh}s
               </div>
             </div>
           </motion.aside>
@@ -468,17 +602,28 @@ export function LiveDisasterMap() {
         >
           <TileLayer url={tileUrl} attribution={TILE_ATTR} maxZoom={19} />
           <MapController target={searchTarget} />
+          <ZoomTracker onZoom={setMapZoom} />
+          {showHeatmap && <HeatmapLayer events={filteredEvents} />}
 
-          {filteredEvents.map(event => (
-            <Marker
-              key={event.id}
-              position={[event.lat, event.lng]}
-              icon={createMarkerIcon(event)}
-              eventHandlers={{
-                click: () => setSelectedEvent(event),
-              }}
-            />
-          ))}
+          {clusterEvents(filteredEvents, mapZoom).map(item => {
+            if ("isCluster" in item) {
+              return (
+                <Marker
+                  key={item.id}
+                  position={[item.lat, item.lng]}
+                  icon={createClusterIcon(item.count, item.maxSeverity)}
+                />
+              );
+            }
+            return (
+              <Marker
+                key={item.id}
+                position={[item.lat, item.lng]}
+                icon={createMarkerIcon(item)}
+                eventHandlers={{ click: () => setSelectedEvent(item) }}
+              />
+            );
+          })}
         </MapContainer>
 
         {/* Bottom bar: stats + live indicator */}

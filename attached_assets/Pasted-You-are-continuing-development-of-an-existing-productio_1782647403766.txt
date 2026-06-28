@@ -1,0 +1,119 @@
+You are continuing development of an existing production-quality project.
+
+IMPORTANT
+
+The repository already contains significant completed work.
+
+Before writing any code:
+
+1. Analyze the repository ONCE.
+2. Determine which features are already implemented.
+3. Determine which Phase 4, Phase 5, Phase 6 and Phase 7 features are still missing.
+4. DO NOT recreate, replace, or rewrite completed functionality.
+5. DO NOT modify package.json, workspace configuration, Vite configuration, Git configuration, environment configuration or project structure.
+6. DO NOT duplicate components or APIs.
+7. Reuse all existing components, utilities, hooks, API clients and services.
+
+MISSION
+
+Continue from the current implementation and COMPLETE ONLY the REMAINING work.
+
+========================
+PHASE 4
+========================
+
+Complete the remaining AI Disaster Intelligence features including:
+
+• AI prediction engine
+• Regional risk scoring
+• AI confidence visualization
+• Historical comparison
+• Trend analytics
+• AI recommendations
+• Advanced charts
+• Dashboard improvements
+• Loading states
+• Error states
+• Mobile optimization
+
+========================
+PHASE 5
+========================
+
+Complete the remaining Global Live Monitoring features:
+
+• Interactive live disaster map
+• Live weather integration
+• Disaster filters
+• Marker clustering
+• Heatmaps
+• Country search
+• City search
+• Disaster detail panels
+• Live statistics
+• Real-time updates
+• Performance optimization
+
+========================
+PHASE 6
+========================
+
+Complete the Emergency Response platform:
+
+• AI emergency planner
+• Survival checklist
+• Personalized preparedness plans
+• Shelter finder
+• Hospital finder
+• Emergency contacts
+• Disaster guides
+• Downloadable emergency plan
+• Print support
+• Offline-friendly functionality
+• Accessibility improvements
+
+========================
+PHASE 7
+========================
+
+Complete production readiness:
+
+• Lighthouse optimization
+• SEO
+• Accessibility
+• Bundle optimization
+• Code splitting
+• Image optimization
+• Route optimization
+• Remove duplicate code
+• Improve maintainability
+• Responsive polish
+• Animation polish
+• Error handling
+• Final UI refinement
+
+========================
+
+QUALITY REQUIREMENTS
+
+• Never break existing pages.
+• Never remove existing functionality.
+• Preserve the existing premium futuristic design.
+• Keep TypeScript error-free.
+• Keep the application runnable after every change.
+• Test each completed feature before continuing.
+
+IMPORTANT
+
+Skip every feature that is already implemented.
+
+Only implement missing functionality.
+
+Minimize token usage.
+
+At the end provide:
+
+1. Completed features
+2. Files modified
+3. Remaining missing features (if any)
+4. Whether Phases 4–7 are now fully complete.
