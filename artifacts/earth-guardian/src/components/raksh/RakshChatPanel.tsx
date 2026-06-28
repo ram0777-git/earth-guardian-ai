@@ -20,10 +20,19 @@ import {
   BarChart2,
   ShieldAlert,
   LayoutDashboard,
+  Paperclip,
+  Volume2,
+  VolumeX,
+  Download,
+  Search,
+  X,
+  FileText,
+  ImageIcon,
 } from "lucide-react";
 import type { RakshCommand } from "./RakshContext";
 import { useRaksh } from "./RakshContext";
 import { RakshMarkdown } from "./RakshMarkdown";
+import { useVoiceOutput } from "@/hooks/useVoiceOutput";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -38,18 +47,20 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const COMMAND_ICONS: Record<string, React.ReactNode> = {
-  "/dashboard":       <LayoutDashboard className="h-3 w-3" />,
-  "/live-map":        <MapPin className="h-3 w-3" />,
-  "/risk-analysis":   <BarChart2 className="h-3 w-3" />,
+  "/dashboard":         <LayoutDashboard className="h-3 w-3" />,
+  "/live-map":          <MapPin className="h-3 w-3" />,
+  "/risk-analysis":     <BarChart2 className="h-3 w-3" />,
   "/emergency-planner": <ShieldAlert className="h-3 w-3" />,
 };
 
 const COMMAND_LABELS: Record<string, string> = {
-  "/dashboard":       "Open Dashboard",
-  "/live-map":        "Open Live Map",
-  "/risk-analysis":   "Open Risk Analysis",
+  "/dashboard":         "Open Dashboard",
+  "/live-map":          "Open Live Map",
+  "/risk-analysis":     "Open Risk Analysis",
   "/emergency-planner": "Open Emergency Planner",
 };
+
+const ACCEPTED_FILE_TYPES = "image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,application/json,.md,.csv,.txt,.json,.geojson";
 
 function CommandButtons({ commands }: { commands: RakshCommand[] }) {
   if (!commands.length) return null;
@@ -60,10 +71,7 @@ function CommandButtons({ commands }: { commands: RakshCommand[] }) {
           key={i}
           href={cmd.path}
           className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-cyan-300 transition-all"
-          style={{
-            background: "rgba(0,188,212,0.12)",
-            border: "1px solid rgba(0,188,212,0.25)",
-          }}
+          style={{ background: "rgba(0,188,212,0.12)", border: "1px solid rgba(0,188,212,0.25)" }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,188,212,0.22)"; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,188,212,0.12)"; }}
         >
@@ -92,6 +100,30 @@ function TypingIndicator() {
   );
 }
 
+function VoiceWaveform() {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <motion.div
+          key={i}
+          className="w-0.5 rounded-full bg-red-400"
+          animate={{ height: ["4px", `${8 + Math.sin(i) * 6}px`, "4px"] }}
+          transition={{ duration: 0.5 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface AttachmentState {
+  type: "image" | "document";
+  name: string;
+  previewUrl?: string;
+  base64?: string;
+  textContent?: string;
+  mimeType: string;
+}
+
 interface Props {
   compact?: boolean;
   showSidebar?: boolean;
@@ -103,6 +135,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     conversations,
     isStreaming,
     sendMessage,
+    sendMessageWithAttachment,
     stopStreaming,
     newConversation,
     selectConversation,
@@ -113,14 +146,21 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     requestBrief,
   } = useRaksh();
 
+  const { speak, stop: stopSpeaking, speakingId, isSupported: ttsSupported } = useVoiceOutput();
+
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [attachment, setAttachment] = useState<AttachmentState | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
@@ -132,11 +172,27 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isStreaming) return;
+    if ((!trimmed && !attachment) || isStreaming) return;
+
+    if (attachment) {
+      const fileData = attachment.base64 ?? attachment.textContent ?? "";
+      await sendMessageWithAttachment(
+        trimmed,
+        fileData,
+        attachment.mimeType,
+        attachment.name,
+        attachment.type,
+        attachment.previewUrl,
+      );
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      setAttachment(null);
+    } else {
+      await sendMessage(trimmed);
+    }
+
     setInput("");
     inputRef.current?.focus();
-    await sendMessage(trimmed);
-  }, [input, isStreaming, sendMessage]);
+  }, [input, attachment, isStreaming, sendMessage, sendMessageWithAttachment]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -176,7 +232,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     const rec = new SpeechRecognitionImpl();
     rec.continuous = false;
     rec.interimResults = true;
-    rec.lang = "en-US";
+    rec.lang = navigator.language || "en-US";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
       const transcript = Array.from(e.results)
@@ -191,13 +247,72 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     setIsRecording(true);
   };
 
-  const isEmergency = EMERGENCY_KEYWORDS.test(input);
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
 
+    const isImage = file.type.startsWith("image/");
+
+    if (isImage) {
+      const previewUrl = URL.createObjectURL(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1] ?? "";
+        setAttachment({ type: "image", name: file.name, previewUrl, base64, mimeType: file.type });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachment({ type: "document", name: file.name, textContent: reader.result as string, mimeType: file.type });
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleExportChat = () => {
+    if (!activeConversation || messages.length === 0) return;
+    const lines = [
+      `# ${activeConversation.title}`,
+      `*Exported from Raksh AI — Earth Guardian AI*`,
+      `*Date: ${new Date().toLocaleString()}*`,
+      "",
+      ...messages.map((m) => {
+        const time = new Date(m.timestamp).toLocaleTimeString();
+        const who = m.role === "user" ? "**You**" : "**Raksh AI**";
+        return `${who} *(${time})*:\n\n${m.content}`;
+      }),
+    ];
+    const blob = new Blob([lines.join("\n\n---\n\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeConversation.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredConversations = conversations.filter((c) =>
+    !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  const isEmergency = EMERGENCY_KEYWORDS.test(input);
   const lastMsg = messages[messages.length - 1];
   const canRegenerate = !isStreaming && lastMsg?.role === "assistant" && messages.length >= 2;
 
   return (
     <div className={cn("flex", compact ? "flex-col h-full" : "flex-row h-full")}>
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPTED_FILE_TYPES}
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
       {showSidebar && (
         <AnimatePresence>
           {sidebarOpen && (
@@ -216,15 +331,42 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                   <Plus className="h-4 w-4" />
                   New conversation
                 </button>
+
+                {/* Search */}
+                <AnimatePresence>
+                  {showSearch && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex items-center gap-1.5 rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+                        <Search className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                        <input
+                          autoFocus
+                          className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 outline-none"
+                          placeholder="Search conversations…"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery && (
+                          <button type="button" onClick={() => setSearchQuery("")}>
+                            <X className="h-3 w-3 text-slate-500 hover:text-white" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="flex-1 overflow-y-auto space-y-1">
-                  {conversations.map((c) => (
+                  {filteredConversations.map((c) => (
                     <div
                       key={c.id}
                       className={cn(
                         "group flex items-center gap-1.5 rounded-xl px-3 py-2 cursor-pointer transition-colors",
-                        c.id === activeConvId
-                          ? "bg-white/12 text-white"
-                          : "text-slate-400 hover:bg-white/6 hover:text-white",
+                        c.id === activeConvId ? "bg-white/12 text-white" : "text-slate-400 hover:bg-white/6 hover:text-white",
                       )}
                       onClick={() => selectConversation(c.id)}
                     >
@@ -234,15 +376,9 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                           value={editTitle}
                           autoFocus
                           onChange={(e) => setEditTitle(e.target.value)}
-                          onBlur={() => {
-                            renameConversation(c.id, editTitle);
-                            setEditingId(null);
-                          }}
+                          onBlur={() => { renameConversation(c.id, editTitle); setEditingId(null); }}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              renameConversation(c.id, editTitle);
-                              setEditingId(null);
-                            }
+                            if (e.key === "Enter") { renameConversation(c.id, editTitle); setEditingId(null); }
                           }}
                           onClick={(e) => e.stopPropagation()}
                         />
@@ -252,21 +388,14 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                       <div className="hidden group-hover:flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(c.id);
-                            setEditTitle(c.title);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditTitle(c.title); }}
                           className="rounded p-0.5 hover:text-cyan-400"
                         >
                           <Edit3 className="h-3 w-3" />
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteConversation(c.id);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
                           className="rounded p-0.5 hover:text-red-400"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -274,6 +403,9 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                       </div>
                     </div>
                   ))}
+                  {filteredConversations.length === 0 && searchQuery && (
+                    <p className="text-xs text-slate-500 text-center py-4">No results for "{searchQuery}"</p>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -294,9 +426,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
               >
-                <ChevronLeft
-                  className={cn("h-4 w-4 transition-transform", sidebarOpen && "rotate-180")}
-                />
+                <ChevronLeft className={cn("h-4 w-4 transition-transform", sidebarOpen && "rotate-180")} />
               </button>
             )}
             <div
@@ -317,11 +447,22 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               </div>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.8)]" />
-                <span className="text-[10px] text-slate-400">Disaster Intelligence Copilot</span>
+                <span className="text-[10px] text-slate-400">Multimodal · Voice · Vision</span>
               </div>
             </div>
           </div>
+
           <div className="flex items-center gap-1">
+            {showSidebar && (
+              <button
+                type="button"
+                onClick={() => { setShowSearch(!showSearch); setSidebarOpen(true); }}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/8 transition-colors"
+                title="Search conversations"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={requestBrief}
@@ -341,6 +482,16 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 title="New conversation"
               >
                 <Plus className="h-4 w-4" />
+              </button>
+            )}
+            {activeConversation && messages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportChat}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-white/8 transition-colors"
+                title="Export chat as Markdown"
+              >
+                <Download className="h-4 w-4" />
               </button>
             )}
             {activeConversation && messages.length > 0 && (
@@ -368,8 +519,8 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               </div>
               <div className="text-center space-y-1">
                 <h3 className="text-base font-semibold text-white">Raksh AI</h3>
-                <p className="text-xs text-slate-400 max-w-[260px]">
-                  Your disaster intelligence & emergency response copilot
+                <p className="text-xs text-slate-400 max-w-[280px]">
+                  Disaster intelligence & emergency copilot. Ask anything, upload images, or use voice.
                 </p>
               </div>
               <div className={cn("grid gap-2 w-full", compact ? "grid-cols-1" : "grid-cols-2")}>
@@ -379,10 +530,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                     type="button"
                     onClick={() => sendMessage(prompt)}
                     className="text-left rounded-xl px-3 py-2.5 text-xs text-slate-300 transition-all"
-                    style={{
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLElement).style.background = "rgba(26,115,232,0.15)";
                       (e.currentTarget as HTMLElement).style.borderColor = "rgba(26,115,232,0.3)";
@@ -415,20 +563,47 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               )}
 
               <div className={cn("max-w-[85%] group", msg.role === "user" ? "items-end" : "items-start", "flex flex-col")}>
+                {/* User message */}
                 {msg.role === "user" ? (
-                  <div
-                    className="rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-sm text-white"
-                    style={{ background: "linear-gradient(135deg,#1a73e8,#2563eb)" }}
-                  >
-                    {msg.content}
+                  <div className="flex flex-col gap-1.5 items-end">
+                    {/* Image attachment preview */}
+                    {msg.attachment?.type === "image" && msg.attachment.url && (
+                      <div className="rounded-xl overflow-hidden border border-white/10 max-w-[200px]">
+                        <img
+                          src={msg.attachment.url}
+                          alt={msg.attachment.name}
+                          className="w-full object-cover max-h-40"
+                        />
+                        <div className="px-2 py-1 text-[10px] text-slate-400 truncate" style={{ background: "rgba(0,0,0,0.4)" }}>
+                          <ImageIcon className="h-2.5 w-2.5 inline mr-1" />
+                          {msg.attachment.name}
+                        </div>
+                      </div>
+                    )}
+                    {/* Document attachment badge */}
+                    {msg.attachment?.type === "document" && (
+                      <div
+                        className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] text-cyan-300"
+                        style={{ background: "rgba(0,188,212,0.12)", border: "1px solid rgba(0,188,212,0.25)" }}
+                      >
+                        <FileText className="h-3 w-3" />
+                        {msg.attachment.name}
+                      </div>
+                    )}
+                    {msg.content && (
+                      <div
+                        className="rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-sm text-white"
+                        style={{ background: "linear-gradient(135deg,#1a73e8,#2563eb)" }}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
                   </div>
                 ) : (
+                  /* Assistant message */
                   <div
                     className="rounded-2xl rounded-tl-sm px-3.5 py-2.5"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
                   >
                     {msg.content === "" && isStreaming && idx === messages.length - 1 ? (
                       <TypingIndicator />
@@ -438,9 +613,9 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                   </div>
                 )}
 
+                {/* Assistant action buttons */}
                 {msg.role === "assistant" && msg.content && (
                   <>
-                    {/* Command navigation buttons */}
                     {msg.commands && msg.commands.length > 1 && (
                       <CommandButtons commands={msg.commands} />
                     )}
@@ -450,13 +625,33 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                         onClick={() => handleCopy(msg.id, msg.content)}
                         className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:text-white hover:bg-white/8 flex items-center gap-1 transition-colors"
                       >
-                        {copiedId === msg.id ? (
-                          <Check className="h-3 w-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="h-3 w-3" />
-                        )}
+                        {copiedId === msg.id ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                         {copiedId === msg.id ? "Copied" : "Copy"}
                       </button>
+
+                      {ttsSupported && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (speakingId === msg.id) {
+                              stopSpeaking();
+                            } else {
+                              speak(msg.id, msg.content);
+                            }
+                          }}
+                          className={cn(
+                            "rounded-md px-2 py-1 text-[10px] flex items-center gap-1 transition-colors",
+                            speakingId === msg.id
+                              ? "text-cyan-400 bg-cyan-400/10"
+                              : "text-slate-400 hover:text-white hover:bg-white/8",
+                          )}
+                          title={speakingId === msg.id ? "Stop speaking" : "Read aloud"}
+                        >
+                          {speakingId === msg.id ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                          {speakingId === msg.id ? "Stop" : "Speak"}
+                        </button>
+                      )}
+
                       {idx === messages.length - 1 && canRegenerate && (
                         <button
                           type="button"
@@ -477,11 +672,12 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
+        {/* Input area */}
         <div
           className="flex-shrink-0 p-3 border-t border-white/8"
           style={{ background: "rgba(255,255,255,0.02)" }}
         >
+          {/* Emergency banner */}
           {isEmergency && input.trim() && (
             <motion.div
               initial={{ opacity: 0, y: 4 }}
@@ -492,43 +688,109 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               🚨 <span className="font-semibold">Emergency Mode</span> — Raksh AI will provide immediate safety guidance
             </motion.div>
           )}
+
+          {/* Attachment preview bar */}
+          <AnimatePresence>
+            {attachment && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-2 overflow-hidden"
+              >
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{ background: "rgba(0,188,212,0.08)", border: "1px solid rgba(0,188,212,0.2)" }}
+                >
+                  {attachment.type === "image" && attachment.previewUrl ? (
+                    <img src={attachment.previewUrl} alt="preview" className="h-8 w-8 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <FileText className="h-5 w-5 text-cyan-400 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-cyan-300 truncate">{attachment.name}</p>
+                    <p className="text-[10px] text-slate-500 capitalize">{attachment.type} ready for analysis</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+                      setAttachment(null);
+                    }}
+                    className="rounded-md p-1 text-slate-400 hover:text-white hover:bg-white/8 flex-shrink-0"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Recording indicator */}
+          <AnimatePresence>
+            {isRecording && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-2 rounded-xl px-3 py-2 flex items-center gap-2"
+                style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)" }}
+              >
+                <div className="h-2 w-2 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+                <VoiceWaveform />
+                <span className="text-xs text-red-300 ml-1">Listening… speak now</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Main input row */}
           <div
             className="flex items-end gap-2 rounded-2xl p-2"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.10)",
-            }}
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}
           >
+            {/* Attach file */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isStreaming}
+              className="rounded-xl p-2 text-slate-400 hover:text-cyan-400 hover:bg-white/8 transition-colors disabled:opacity-30 flex-shrink-0"
+              title="Upload image or document"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+
             <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Raksh AI anything about disasters..."
+              placeholder={attachment ? `Add a message about ${attachment.name}…` : "Ask Raksh AI anything about disasters…"}
               rows={1}
               className="flex-1 resize-none bg-transparent text-sm text-white placeholder-slate-500 outline-none py-1.5 px-1 max-h-28 leading-relaxed"
               style={{ scrollbarWidth: "none" }}
             />
-            <div className="flex items-center gap-1.5 pb-1">
+
+            <div className="flex items-center gap-1.5 pb-1 flex-shrink-0">
+              {/* Voice input */}
               <button
                 type="button"
                 onClick={handleVoice}
                 className={cn(
                   "rounded-xl p-2 transition-colors",
-                  isRecording
-                    ? "text-red-400 bg-red-400/10"
-                    : "text-slate-400 hover:text-white hover:bg-white/8",
+                  isRecording ? "text-red-400 bg-red-400/10" : "text-slate-400 hover:text-white hover:bg-white/8",
                 )}
-                title="Voice input"
+                title={isRecording ? "Stop recording" : "Voice input"}
               >
                 {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </button>
+
+              {/* Send / Stop */}
               {isStreaming ? (
                 <button
                   type="button"
                   onClick={stopStreaming}
                   className="rounded-xl p-2 text-red-400 hover:bg-red-400/10 transition-colors"
-                  title="Stop"
+                  title="Stop generation"
                 >
                   <Square className="h-4 w-4" />
                 </button>
@@ -536,10 +798,10 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && !attachment}
                   className="rounded-xl p-2 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   style={{
-                    background: input.trim()
+                    background: (input.trim() || attachment)
                       ? "linear-gradient(135deg,#1a73e8,#00bcd4)"
                       : "rgba(255,255,255,0.08)",
                   }}
@@ -550,8 +812,9 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               )}
             </div>
           </div>
+
           <p className="text-center text-[10px] text-slate-600 mt-1.5">
-            Raksh AI · Earth Guardian · Press <kbd className="text-slate-500">Enter</kbd> to send
+            Raksh AI · Voice · Vision · Documents · Press <kbd className="text-slate-500">Enter</kbd> to send
           </p>
         </div>
       </div>

@@ -8,12 +8,20 @@ import {
 } from "react";
 import { useLocation } from "wouter";
 
+export interface RakshAttachment {
+  type: "image" | "document";
+  name: string;
+  url?: string;
+  mimeType: string;
+}
+
 export interface RakshMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
   commands?: RakshCommand[];
+  attachment?: RakshAttachment;
 }
 
 export interface RakshCommand {
@@ -56,6 +64,14 @@ interface RakshContextValue {
   deleteConversation: (id: string) => void;
   clearConversation: (id: string) => void;
   sendMessage: (content: string) => Promise<void>;
+  sendMessageWithAttachment: (
+    content: string,
+    fileData: string,
+    mimeType: string,
+    fileName: string,
+    fileType: "image" | "document",
+    previewUrl?: string,
+  ) => Promise<void>;
   stopStreaming: () => void;
   setSelectedDisaster: (d: SelectedDisaster | null) => void;
   setSelectedLocation: (loc: string | null) => void;
@@ -93,13 +109,10 @@ function createConversation(): RakshConversation {
   return { id: generateId(), title: "New Conversation", messages: [], createdAt: Date.now(), updatedAt: Date.now() };
 }
 
-// Parse <raksh-command>{...}</raksh-command> tags from streamed content
 function parseCommands(content: string): { clean: string; commands: RakshCommand[] } {
   const commands: RakshCommand[] = [];
   const clean = content.replace(/<raksh-command>(.*?)<\/raksh-command>/gs, (_, json) => {
-    try {
-      commands.push(JSON.parse(json) as RakshCommand);
-    } catch { /* skip */ }
+    try { commands.push(JSON.parse(json) as RakshCommand); } catch { /* skip */ }
     return "";
   }).trim();
   return { clean, commands };
@@ -154,9 +167,7 @@ export function RakshProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const executeCommand = useCallback((cmd: RakshCommand) => {
-    if (cmd.type === "navigate") {
-      navigate(cmd.path);
-    }
+    if (cmd.type === "navigate") navigate(cmd.path);
   }, [navigate]);
 
   const sendMessage = useCallback(async (content: string) => {
@@ -190,8 +201,6 @@ export function RakshProvider({ children }: { children: ReactNode }) {
     abortRef.current = abort;
 
     const historyMsgs = [...conv.messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
-
-    // Build rich context
     const appContext = {
       currentPage: pathname,
       ...(selectedLocation ? { selectedLocation } : {}),
@@ -249,7 +258,6 @@ export function RakshProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Parse commands from final content
         const { clean, commands } = parseCommands(accumulated);
         setConversations((prev) => {
           const next = prev.map((c) =>
@@ -260,10 +268,7 @@ export function RakshProvider({ children }: { children: ReactNode }) {
           saveConversations(next);
           return next;
         });
-        // Auto-execute single commands
-        if (commands.length === 1) {
-          setTimeout(() => executeCommand(commands[0]!), 800);
-        }
+        if (commands.length === 1) setTimeout(() => executeCommand(commands[0]!), 800);
 
       } else {
         const data = await resp.json() as { content?: string; error?: string };
@@ -298,6 +303,85 @@ export function RakshProvider({ children }: { children: ReactNode }) {
     }
   }, [activeConvId, conversations, persist, pathname, selectedDisaster, selectedLocation, executeCommand]);
 
+  const sendMessageWithAttachment = useCallback(async (
+    content: string,
+    fileData: string,
+    mimeType: string,
+    fileName: string,
+    fileType: "image" | "document",
+    previewUrl?: string,
+  ) => {
+    let convId = activeConvId;
+    let currentConvs = conversations;
+
+    if (!convId) {
+      const conv = createConversation();
+      currentConvs = [conv, ...conversations];
+      persist(currentConvs);
+      convId = conv.id;
+      setActiveConvId(convId);
+    }
+
+    const displayContent = content || (fileType === "image" ? `Analyze this image: ${fileName}` : `Analyze this document: ${fileName}`);
+    const attachment: RakshAttachment = { type: fileType, name: fileName, url: previewUrl, mimeType };
+    const userMsg: RakshMessage = { id: generateId(), role: "user", content: displayContent, timestamp: Date.now(), attachment };
+    const conv = currentConvs.find((c) => c.id === convId)!;
+    const isFirstMsg = conv.messages.length === 0;
+    const title = isFirstMsg ? generateTitle(displayContent) : conv.title;
+
+    const updatedConvs = currentConvs.map((c) =>
+      c.id === convId ? { ...c, title, messages: [...c.messages, userMsg], updatedAt: Date.now() } : c,
+    );
+    persist(updatedConvs);
+
+    const assistantMsgId = generateId();
+    const assistantMsg: RakshMessage = { id: assistantMsgId, role: "assistant", content: "", timestamp: Date.now() };
+    persist(updatedConvs.map((c) => c.id === convId ? { ...c, messages: [...c.messages, assistantMsg] } : c));
+
+    setIsStreaming(true);
+    try {
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const endpoint = fileType === "image" ? `${base}/api/raksh/analyze-image` : `${base}/api/raksh/analyze-document`;
+      const body = fileType === "image"
+        ? { imageData: fileData, mimeType, userPrompt: content || undefined }
+        : { content: fileData, fileName, userPrompt: content || undefined };
+
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await resp.json() as { content?: string; error?: string };
+      if (!resp.ok || data.error) throw new Error(data.error ?? "Analysis failed");
+
+      const { clean, commands } = parseCommands(data.content ?? "");
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === convId
+            ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: clean, commands } : m) }
+            : c,
+        );
+        saveConversations(next);
+        return next;
+      });
+      if (commands.length === 1) setTimeout(() => executeCommand(commands[0]!), 800);
+    } catch (err) {
+      const errorContent = `❌ **Error:** ${(err as Error).message}`;
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c.id === convId
+            ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: errorContent } : m) }
+            : c,
+        );
+        saveConversations(next);
+        return next;
+      });
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [activeConvId, conversations, persist, executeCommand]);
+
   const requestBrief = useCallback(async () => {
     await sendMessage("Give me today's Daily Disaster Brief using all available live data.");
   }, [sendMessage]);
@@ -308,7 +392,7 @@ export function RakshProvider({ children }: { children: ReactNode }) {
       selectedDisaster, selectedLocation,
       openChat, closeChat, newConversation, selectConversation,
       renameConversation, deleteConversation, clearConversation,
-      sendMessage, stopStreaming,
+      sendMessage, sendMessageWithAttachment, stopStreaming,
       setSelectedDisaster, setSelectedLocation,
       requestBrief,
     }}>

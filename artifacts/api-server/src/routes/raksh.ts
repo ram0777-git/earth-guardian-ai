@@ -414,6 +414,108 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
   }
 });
 
+// ── Route: Gemini status ──────────────────────────────────────────────────────
+router.get("/raksh/status", (_req, res) => {
+  const gemini = getGeminiClient();
+  res.json({ ok: !!gemini, model: gemini?.model ?? null, timestamp: Date.now() });
+});
+
+// ── Route: Image analysis via Gemini Vision ───────────────────────────────────
+router.post("/raksh/analyze-image", async (req, res) => {
+  const { imageData, mimeType, userPrompt } = req.body as {
+    imageData: string;
+    mimeType: string;
+    userPrompt?: string;
+  };
+
+  if (!imageData || !mimeType) {
+    res.status(400).json({ error: "imageData and mimeType are required" });
+    return;
+  }
+
+  const gemini = getGeminiClient();
+  if (!gemini) {
+    res.status(503).json({ error: "Gemini not configured" });
+    return;
+  }
+
+  const prompt = userPrompt ||
+    `You are Raksh AI, a world-class disaster intelligence expert. Analyze this image comprehensively.\n\n` +
+    `## 🔍 Disaster / Situation Identification\nIdentify what is shown — disaster type, hazard, emergency situation, or general scene.\n\n` +
+    `## ⚡ Severity Assessment\nRate severity 1–10 and classify: Low / Moderate / High / Critical. State confidence %.\n\n` +
+    `## 💥 Visible Damage & Hazards\nDescribe all damage, structural concerns, environmental hazards visible.\n\n` +
+    `## ⚠️ Identified Risks\nList risks to people, infrastructure, and environment.\n\n` +
+    `## 🚨 Immediate Actions Required\nNumbered list of immediate steps.\n\n` +
+    `## 🛡️ Safety Recommendations\nSpecific safety advice for people in or near this area.\n\n` +
+    `## 🎯 Emergency Response Priority\nImmediate / High / Medium / Low — with brief justification.\n\n` +
+    `## 📊 Additional Observations\nAny further context, satellite interpretation, or expert notes.\n\n` +
+    `If this is not disaster-related, still describe fully and note any environmental or safety context.`;
+
+  try {
+    const model = gemini.genAI.getGenerativeModel({
+      model: gemini.model,
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+      ],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+    });
+    const result = await withTimeout(
+      model.generateContent([prompt, { inlineData: { data: imageData, mimeType } }]),
+      TIMEOUT_MS,
+    );
+    res.json({ content: result.response.text() });
+  } catch (err) {
+    console.error("[Raksh] Image analysis error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Image analysis failed" });
+  }
+});
+
+// ── Route: Document analysis ──────────────────────────────────────────────────
+router.post("/raksh/analyze-document", async (req, res) => {
+  const { content: docContent, fileName, userPrompt } = req.body as {
+    content: string;
+    fileName: string;
+    userPrompt?: string;
+  };
+
+  if (!docContent || !fileName) {
+    res.status(400).json({ error: "content and fileName are required" });
+    return;
+  }
+
+  const gemini = getGeminiClient();
+  if (!gemini) {
+    res.status(503).json({ error: "Gemini not configured" });
+    return;
+  }
+
+  const truncated = docContent.slice(0, 32000);
+  const prompt = userPrompt ||
+    `You are Raksh AI. Analyze this document and produce a comprehensive intelligence report.\n\n` +
+    `**Document**: ${fileName}\n\n` +
+    `## 📄 Executive Summary\nConcise 2–3 paragraph overview.\n\n` +
+    `## 🔑 Key Findings\nMost important findings, conclusions, and data points.\n\n` +
+    `## ⚠️ Risk Assessment\nDisaster, safety, or emergency risks: Low / Moderate / High / Critical\n\n` +
+    `## 📊 Key Data & Statistics\nImportant numbers, dates, locations, measurements.\n\n` +
+    `## ✅ Action Items\nSpecific recommended actions based on this document.\n\n` +
+    `## 🔮 Preparedness Score\nIf applicable, rate readiness 0–100 with explanation.\n\n` +
+    `## 💡 Expert Recommendations\nStrategic recommendations from a disaster intelligence perspective.\n\n` +
+    `---\nDOCUMENT CONTENT:\n${truncated}` +
+    (docContent.length > 32000 ? "\n\n[Content truncated — showing first 32,000 characters]" : "");
+
+  try {
+    const model = getGeminiModel(gemini, BASE_SYSTEM_PROMPT);
+    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
+    res.json({ content: result.response.text() });
+  } catch (err) {
+    console.error("[Raksh] Document analysis error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Document analysis failed" });
+  }
+});
+
 // ── Route: Main chat ──────────────────────────────────────────────────────────
 router.post("/raksh/chat", async (req, res) => {
   const { messages, context } = req.body as {

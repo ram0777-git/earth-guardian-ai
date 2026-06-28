@@ -1,0 +1,1 @@
+- [Raksh AI architecture](raksh-ai.md) — multimodal Gemini AI chat; key env var is GEMINI_API_KEY; server must restart to pick up new secrets.
