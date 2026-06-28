@@ -1,0 +1,358 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Earth Guardian AI API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: disasters
+    description: Disaster event operations
+  - name: alerts
+    description: Alert operations
+  - name: risk
+    description: Risk analysis operations
+  - name: weather
+    description: Weather operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /disasters:
+    get:
+      operationId: getDisasters
+      tags: [disasters]
+      summary: Get all disaster events
+      description: Returns a list of all disaster events
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DisasterEvent"
+  /disasters/{id}:
+    get:
+      operationId: getDisasterById
+      tags: [disasters]
+      summary: Get disaster by ID
+      description: Returns a specific disaster event by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisasterEvent"
+        "404":
+          description: Disaster not found
+  /alerts:
+    get:
+      operationId: getAlerts
+      tags: [alerts]
+      summary: Get all alerts
+      description: Returns a list of all active alerts
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+  /risk-factors:
+    get:
+      operationId: getRiskFactors
+      tags: [risk]
+      summary: Get risk factors
+      description: Returns regional risk factors
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskFactor"
+  /risk-score:
+    get:
+      operationId: getOverallRiskScore
+      tags: [risk]
+      summary: Get overall risk score
+      description: Returns the overall risk score for the region
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskScore"
+  /weather:
+    get:
+      operationId: getWeather
+      tags: [weather]
+      summary: Get weather data
+      description: Returns current weather data and forecast
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherData"
+  /predictions:
+    get:
+      operationId: getAIPredictions
+      tags: [disasters]
+      summary: Get AI predictions
+      description: Returns AI-powered disaster predictions
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIPrediction"
+  /timeline:
+    get:
+      operationId: getTimelineEvents
+      tags: [disasters]
+      summary: Get timeline events
+      description: Returns disaster timeline events
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    DisasterEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [earthquake, flood, wildfire, hurricane, tsunami, drought, landslide, volcano]
+        severity:
+          type: string
+          enum: [critical, high, moderate, low]
+        lat:
+          type: number
+        lng:
+          type: number
+        description:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - severity
+        - lat
+        - lng
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        location:
+          type: string
+        severity:
+          type: string
+          enum: [critical, high, moderate, low]
+        time:
+          type: string
+        type:
+          type: string
+          enum: [earthquake, flood, wildfire, hurricane, tsunami, drought, landslide]
+      required:
+        - id
+        - title
+        - location
+        - severity
+        - time
+        - type
+    RiskFactor:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+          enum: [low, moderate, high, critical]
+        description:
+          type: string
+      required:
+        - id
+        - name
+        - score
+        - level
+        - description
+    RiskScore:
+      type: object
+      properties:
+        overall:
+          type: number
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+          enum: [low, moderate, high, critical]
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - overall
+        - level
+        - timestamp
+    WeatherData:
+      type: object
+      properties:
+        location:
+          type: string
+        temperature:
+          type: number
+        condition:
+          type: string
+        humidity:
+          type: number
+        windSpeed:
+          type: number
+        uvIndex:
+          type: number
+        forecast:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastDay"
+      required:
+        - location
+        - temperature
+        - condition
+        - humidity
+        - windSpeed
+        - uvIndex
+        - forecast
+    ForecastDay:
+      type: object
+      properties:
+        day:
+          type: string
+        high:
+          type: number
+        low:
+          type: number
+        condition:
+          type: string
+      required:
+        - day
+        - high
+        - low
+        - condition
+    AIPrediction:
+      type: object
+      properties:
+        primaryThreat:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 100
+        timeframe:
+          type: string
+        summary:
+          type: string
+        factors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PredictionFactor"
+      required:
+        - primaryThreat
+        - confidence
+        - timeframe
+        - summary
+        - factors
+    PredictionFactor:
+      type: object
+      properties:
+        label:
+          type: string
+        impact:
+          type: number
+          minimum: 0
+          maximum: 100
+      required:
+        - label
+        - impact
+    TimelineEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        time:
+          type: string
+        type:
+          type: string
+          enum: [earthquake, flood, wildfire, hurricane, tsunami, drought]
+        status:
+          type: string
+          enum: [active, monitoring, resolved]
+      required:
+        - id
+        - title
+        - description
+        - time
+        - type
+        - status
+
