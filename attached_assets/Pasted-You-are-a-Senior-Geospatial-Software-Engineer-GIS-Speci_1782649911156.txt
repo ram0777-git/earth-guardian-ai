@@ -1,0 +1,262 @@
+You are a Senior Geospatial Software Engineer, GIS Specialist, and Full-Stack AI Engineer working on the Earth Guardian AI project.
+
+IMPORTANT
+
+The project is already implemented and running.
+
+The Live Map already uses:
+
+* React Leaflet
+* Leaflet
+* CARTO/OpenStreetMap tiles
+* USGS earthquake API
+
+DO NOT replace Leaflet with Google Maps.
+
+DO NOT rewrite the project.
+
+DO NOT recreate existing features.
+
+DO NOT modify package.json, Vite configuration, dependencies, workspace configuration, Git configuration, or unrelated pages.
+
+Analyze the existing Live Map ONCE, then immediately continue implementing only the missing functionality.
+
+Your objective is to transform the existing Live Map into a professional Disaster Intelligence Platform that provides a Google Maps–style user experience while preserving the current architecture.
+
+========================================================
+
+PRIMARY GOAL
+
+When a user searches ANY location in the world, including:
+
+* Country
+* State
+* District
+* City
+* Town
+* Village
+* Landmark
+* Postal / ZIP code
+* Latitude / Longitude
+
+the application must instantly locate it, smoothly fly the map to that position, and display all available disaster intelligence around that location.
+
+========================================================
+
+LOCATION SEARCH
+
+Implement intelligent global search using OpenStreetMap Nominatim (or another reliable free geocoding provider).
+
+Requirements
+
+• Autocomplete suggestions while typing
+• Fast response
+• Debounced requests
+• Search history
+• Recent searches
+• Keyboard navigation
+• Click suggestion to select
+• Search must work for small villages as well as major cities
+
+Selecting a result must:
+
+• smoothly flyTo()
+• automatically zoom correctly
+• drop a highlighted animated marker
+• center the map
+• open a popup
+• refresh all nearby disaster information
+
+========================================================
+
+MAP EXPERIENCE
+
+Upgrade the interaction to a premium Google Maps–style experience.
+
+Implement
+
+• smooth fly animations
+• inertia
+• animated marker highlight
+• current location button
+• fullscreen mode
+• scale control
+• compass
+• reset map button
+• fit-to-location
+• remember previous map position
+• smooth zoom transitions
+
+========================================================
+
+BASE MAPS
+
+Allow switching between:
+
+• Dark
+• Light
+• OpenStreetMap
+• Satellite (Esri World Imagery)
+• Terrain
+• CARTO
+
+Switch instantly without reloading the application.
+
+========================================================
+
+LIVE DISASTER INTELLIGENCE
+
+Automatically display real nearby events around the selected location.
+
+Use existing APIs whenever possible.
+
+Support
+
+• Earthquakes
+• Floods
+• Wildfires
+• Cyclones
+• Storms
+• Landslides (if available)
+
+Display
+
+• severity
+• magnitude
+• distance
+• timestamp
+• status
+• source
+
+========================================================
+
+AI DISASTER PANEL
+
+Create a professional intelligence panel containing
+
+• AI Risk Score
+• Disaster Probability
+• Current Weather
+• Air Quality (if available)
+• Nearby Active Alerts
+• Risk Level
+• Preparedness Score
+• AI Recommendations
+• Safety Instructions
+• Last Updated Time
+
+========================================================
+
+NEARBY EMERGENCY SERVICES
+
+Display nearby
+
+• Hospitals
+• Shelters
+• Fire Stations
+• Police Stations
+• Relief Centers
+
+If data is unavailable, gracefully indicate that rather than inventing information.
+
+========================================================
+
+OVERLAYS
+
+Improve overlays with
+
+• marker clustering
+• heatmap
+• severity colors
+• animated pulse markers
+• configurable search radius
+• disaster filters
+• weather overlay
+• earthquake layer
+• wildfire layer
+• flood layer
+• cyclone layer
+
+========================================================
+
+PERFORMANCE
+
+Optimize
+
+• debounced search
+• API caching
+• lazy loading
+• optimized clustering
+• efficient rendering
+• prevent unnecessary re-renders
+
+========================================================
+
+USER EXPERIENCE
+
+Everything should feel like a premium emergency operations platform.
+
+The experience should be fast, responsive, intuitive, and visually polished.
+
+Maintain the existing futuristic design language.
+
+Do not introduce unnecessary animations that reduce performance.
+
+========================================================
+
+QUALITY REQUIREMENTS
+
+Do not use placeholder implementations.
+
+Do not use fake data.
+
+Reuse existing APIs and components.
+
+Only modify files related to the Live Map.
+
+Do not modify unrelated pages.
+
+Fix any TypeScript or runtime errors introduced.
+
+Keep the project buildable.
+
+========================================================
+
+FINAL VERIFICATION
+
+Before finishing, verify that:
+
+✓ Searching a village works.
+
+✓ Searching a town works.
+
+✓ Searching a city works.
+
+✓ Searching a country works.
+
+✓ The map smoothly flies to the selected location.
+
+✓ Nearby disasters update correctly.
+
+✓ Marker clustering works.
+
+✓ Heatmap works.
+
+✓ Layer switching works.
+
+✓ The project builds successfully.
+
+✓ No TypeScript errors.
+
+✓ No console errors.
+
+✓ No runtime errors.
+
+At the end, provide only:
+
+1. Features implemented.
+2. Files modified.
+3. APIs used.
+4. Remaining limitations (if any).
+
+Do not spend tokens on unnecessary explanations. Focus on implementation quality and production readiness.
