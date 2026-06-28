@@ -428,17 +428,12 @@ router.post("/raksh/chat", async (req, res) => {
 
   const gemini = getGeminiClient();
   if (!gemini) {
-    res.status(200).json({
-      content: `## Raksh AI — Setup Required
-
-To activate Raksh AI with **Gemini 2.5 Flash**, add your Google AI API key:
-
-| Variable | Description |
-|---|---|
-| \`GEMINI_API_KEY\` | Your Google AI Studio API key (**required**) |
-| \`GEMINI_MODEL\` | Model name (optional, default: \`gemini-2.5-flash\`) |
-
-Get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey) and add it to your Replit environment secrets.`,
+    const keyPresent = !!process.env["GEMINI_API_KEY"];
+    console.error(`[Raksh] getGeminiClient() returned null. GEMINI_API_KEY present: ${keyPresent}`);
+    res.status(503).json({
+      error: keyPresent
+        ? "Gemini client failed to initialize despite key being present — check server logs."
+        : "GEMINI_API_KEY is not set in environment. Add it to Replit Secrets and restart the server.",
     });
     return;
   }

@@ -1,6 +1,14 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
+console.log("Gemini API Loaded:", !!process.env.GEMINI_API_KEY);
+
+if (!process.env.GEMINI_API_KEY) {
+  console.error("[Raksh] GEMINI_API_KEY is missing from environment — Raksh AI will not function.");
+} else {
+  console.log("[Raksh] GEMINI_API_KEY detected, Gemini will initialize on first request.");
+}
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
