@@ -28,6 +28,9 @@ import {
   X,
   FileText,
   ImageIcon,
+  Upload,
+  FileBarChart,
+  Headphones,
 } from "lucide-react";
 import type { RakshCommand } from "./RakshContext";
 import { useRaksh } from "./RakshContext";
@@ -157,6 +160,10 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   const [attachment, setAttachment] = useState<AttachmentState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const handsFreeRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -169,6 +176,21 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isStreaming]);
+
+  // Keep ref in sync for use in callbacks without stale closure issues
+  useEffect(() => { handsFreeRef.current = handsFreeMode; }, [handsFreeMode]);
+
+  // Hands-free: auto-restart mic after Raksh finishes responding
+  useEffect(() => {
+    if (!isStreaming && handsFreeRef.current && !isRecording) {
+      const timer = setTimeout(() => {
+        if (handsFreeRef.current) startVoiceRecording();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
@@ -217,43 +239,8 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     setTimeout(() => sendMessage(lastUser.content), 100);
   };
 
-  const handleVoice = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    const SpeechRecognitionImpl = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!SpeechRecognitionImpl) return;
-
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
-
-    const rec = new SpeechRecognitionImpl();
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = navigator.language || "en-US";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((r: any) => r[0].transcript)
-        .join("");
-      setInput(transcript);
-    };
-    rec.onend = () => setIsRecording(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsRecording(true);
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-
+  const processFile = useCallback((file: File) => {
     const isImage = file.type.startsWith("image/");
-
     if (isImage) {
       const previewUrl = URL.createObjectURL(file);
       const reader = new FileReader();
@@ -270,7 +257,100 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
       };
       reader.readAsText(file);
     }
+  }, []);
+
+  const startVoiceRecording = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechRecognitionImpl = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SpeechRecognitionImpl) return;
+    const rec = new SpeechRecognitionImpl();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = navigator.language || "en-US";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript = Array.from(e.results)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((r: any) => r[0].transcript)
+        .join("");
+      setInput(transcript);
+    };
+    rec.onend = () => setIsRecording(false);
+    rec.start();
+    recognitionRef.current = rec;
+    setIsRecording(true);
+  }, []);
+
+  const handleVoice = useCallback(() => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    startVoiceRecording();
+  }, [isRecording, startVoiceRecording]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    processFile(file);
   };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only clear if leaving the component entirely
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  };
+
+  const handleGenerateReport = useCallback(async () => {
+    if (isGeneratingReport || isStreaming) return;
+    setIsGeneratingReport(true);
+    try {
+      const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const res = await fetch(`${BASE}/api/raksh/generate-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Report generation failed" }));
+        throw new Error((err as { error: string }).error);
+      }
+      const data = await res.json() as { content: string; generatedAt: string };
+      const filename = `earth-guardian-report-${new Date().toISOString().split("T")[0]}.md`;
+      const blob = new Blob([data.content], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      // Also show a brief message in chat
+      await sendMessage("📄 I just generated a comprehensive Disaster Intelligence Report. It has been downloaded to your device. Would you like me to summarize the key findings?");
+    } catch (err) {
+      console.error("[Raksh] Report generation failed:", err);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }, [isGeneratingReport, isStreaming, sendMessage]);
 
   const handleExportChat = () => {
     if (!activeConversation || messages.length === 0) return;
@@ -303,7 +383,12 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   const canRegenerate = !isStreaming && lastMsg?.role === "assistant" && messages.length >= 2;
 
   return (
-    <div className={cn("flex", compact ? "flex-col h-full" : "flex-row h-full")}>
+    <div
+      className={cn("flex relative", compact ? "flex-col h-full" : "flex-row h-full")}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -312,6 +397,27 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
         className="hidden"
         onChange={handleFileSelect}
       />
+
+      {/* Drag-and-drop overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-xl pointer-events-none"
+            style={{
+              background: "rgba(0,188,212,0.12)",
+              border: "2px dashed rgba(0,188,212,0.6)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <Upload className="h-10 w-10 text-cyan-400" />
+            <p className="text-sm font-semibold text-cyan-300">Drop to analyze with Raksh AI</p>
+            <p className="text-xs text-slate-400">Images, documents, CSVs, JSON accepted</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showSidebar && (
         <AnimatePresence>
@@ -463,6 +569,39 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 <Search className="h-4 w-4" />
               </button>
             )}
+            {/* Hands-free mode toggle */}
+            <button
+              type="button"
+              onClick={() => setHandsFreeMode(m => !m)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors",
+                handsFreeMode
+                  ? "text-emerald-300 bg-emerald-500/15 border border-emerald-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/8",
+              )}
+              title={handsFreeMode ? "Hands-free ON — mic restarts automatically" : "Enable hands-free voice mode"}
+            >
+              <Headphones className="h-3.5 w-3.5" />
+              {!compact && <span>{handsFreeMode ? "Hands-free" : "Hands-free"}</span>}
+            </button>
+
+            {/* Generate Report */}
+            <button
+              type="button"
+              onClick={handleGenerateReport}
+              disabled={isGeneratingReport || isStreaming}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-violet-300 hover:text-white transition-colors disabled:opacity-40"
+              style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)" }}
+              title="Generate comprehensive disaster intelligence report (downloads as .md)"
+            >
+              {isGeneratingReport ? (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              ) : (
+                <FileBarChart className="h-3 w-3" />
+              )}
+              {!compact && <span>{isGeneratingReport ? "Generating…" : "Report"}</span>}
+            </button>
+
             <button
               type="button"
               onClick={requestBrief}

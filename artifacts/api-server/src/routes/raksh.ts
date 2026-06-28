@@ -64,6 +64,43 @@ NAVIGATION COMMANDS — when user asks to navigate, append at the END:
 <raksh-command>{"type":"navigate","path":"/risk-analysis"}</raksh-command>
 <raksh-command>{"type":"navigate","path":"/emergency-planner"}</raksh-command>
 
+DISASTER SIMULATION MODE — triggered by: "what if", "scenario", "simulate", "hypothetical", "suppose", "imagine":
+Use this EXACT format:
+## 🌍 Disaster Simulation: [Full Scenario Title]
+### 📋 Scenario Overview
+### ⏱️ Impact Timeline (First 72 Hours)
+| Hour | Event | Impact Level |
+|---|---|---|
+### 💥 Estimated Impact Assessment
+- **Affected Population**: [estimate]
+- **Potential Casualties**: [range]
+- **Infrastructure Damage**: [description]
+- **Economic Impact**: [USD estimate]
+- **Displacement**: [estimate]
+### 🏥 Emergency Resource Requirements
+| Resource | Quantity | Priority |
+|---|---|---|
+| Medical Teams | | |
+| Rescue Personnel | | |
+| Food Packages | | |
+| Shelter Units | | |
+### 🚨 Immediate Response Protocol
+### ✅ 48-Hour Action Plan
+### 📊 Composite Risk Score: [X]/100
+
+RESOURCE PLANNING MODE — triggered by: "deploy", "allocate", "volunteers", "relief", "resources for", "resource plan":
+Use this format:
+## 📦 Resource Deployment Plan: [Operation Name]
+### 👥 Personnel Deployment
+| Role | Count | Priority | Deployment Time |
+|---|---|---|---|
+### 🏥 Medical Resources
+### 🍎 Food & Water Allocation
+### 🏠 Shelter Requirements
+### 🚗 Transportation & Logistics
+### 📋 72-Hour Deployment Timeline
+### 💡 Optimization Recommendations
+
 TONE: Professional, calm, authoritative. Always be honest about data limitations.`;
 
 // ── Intent types ──────────────────────────────────────────────────────────────
@@ -587,6 +624,126 @@ router.post("/raksh/chat", async (req, res) => {
       }
       return;
     }
+  }
+});
+
+// ── Route: Comprehensive Intelligence Report ──────────────────────────────────
+router.post("/raksh/generate-report", async (req, res) => {
+  const gemini = getGeminiClient();
+  if (!gemini) {
+    res.status(503).json({ error: "Gemini API key not configured" });
+    return;
+  }
+
+  const { location, focusArea, userContext } = req.body as {
+    location?: string;
+    focusArea?: string;
+    userContext?: string;
+  };
+
+  try {
+    const liveData = await withTimeout(fetchLiveIntelligence(), 20_000);
+    const liveCtx = buildLiveIntelligenceContext(liveData);
+    const appCtx = buildAppDataContext(new Set<AppIntent>(["disasters", "alerts", "weather", "risk", "predictions", "timeline"]));
+    const systemInstruction = BASE_SYSTEM_PROMPT + appCtx + liveCtx;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+
+    const focusLine = focusArea ? `\n**Focus Area:** ${focusArea}` : "";
+    const locationLine = location ? `\n**Geographic Focus:** ${location}` : "";
+    const contextLine = userContext ? `\n**Context:** ${userContext}` : "";
+
+    const prompt = `Generate a detailed, professional Earth Guardian AI Disaster Intelligence Report using ALL live data available.${focusLine}${locationLine}${contextLine}
+
+Use this EXACT report structure:
+
+---
+# 🌍 Earth Guardian AI — Disaster Intelligence Report
+**Date:** ${dateStr}  
+**Time:** ${timeStr}  
+**Classification:** UNCLASSIFIED — For Emergency Planning Use  
+**Powered by:** Raksh AI × Gemini 2.5 Flash  
+**Data Sources:** USGS · NASA EONET · NOAA · Earth Guardian Platform
+
+---
+
+## 📋 EXECUTIVE SUMMARY
+[3–5 sentence overview of the current global disaster situation. Include number of active events, most critical threats, and overall risk level.]
+
+## 🚨 CRITICAL ACTIVE EVENTS
+[List all red/orange alert events from GDACS and NASA EONET with severity, location, affected population estimate. If none, state "No critical alerts at this time."]
+
+## ⚡ SIGNIFICANT SEISMIC ACTIVITY
+[Table of significant earthquakes in the past 7 days from USGS. Columns: Magnitude | Location | Depth | Date | Source]
+
+## 🌪️ ACTIVE NATURAL EVENTS (NASA EONET)
+[Categorized list: Wildfires, Floods, Storms, Volcanoes, etc. Include event names and locations.]
+
+## ⚠️ WEATHER ALERTS & WARNINGS
+[NOAA alerts summary. If alerts present, list type, severity, and affected areas.]
+
+## 📡 EARTH GUARDIAN PLATFORM INTELLIGENCE
+### Active Monitored Disasters
+### Current Alert Status
+### Risk Scores by Region
+### AI Prediction Outlook (next 48 hours)
+
+## 🏥 EMERGENCY PREPAREDNESS CHECKLIST
+- [ ] Verify emergency contact list (India 112 | US 911 | UK 999 | EU 112)
+- [ ] Check local alert apps and warning systems
+- [ ] Review evacuation routes for your area
+- [ ] Ensure 72-hour emergency supply kit is ready
+- [ ] Backup power and communication plan verified
+- [ ] Medical supplies and prescription medications checked
+- [ ] Important documents in waterproof container
+- [ ] Identified nearest shelter/assembly point
+
+## 📞 EMERGENCY CONTACTS
+| Country | Emergency | Police | Medical | Disaster |
+|---|---|---|---|---|
+| India | 112 | 100 | 108 | NDMA: 1078 |
+| USA | 911 | 911 | 911 | FEMA: 1-800-621-3362 |
+| UK | 999 | 999 | 999 | 105 |
+| EU | 112 | 112 | 112 | ERCC: +32-2-295-0000 |
+| Australia | 000 | 000 | 000 | SES: 132 500 |
+| Japan | 119/110 | 110 | 119 | JMA Alerts |
+
+## ✅ RECOMMENDED ACTIONS (NEXT 24 HOURS)
+1. [Most urgent action based on live data]
+2. [Second action]
+3. [Third action]
+
+## 🔮 72-HOUR AI FORECAST
+[Use all live data to project the most likely scenarios for the next 72 hours. Be specific about trends, escalation risks, and regions to watch.]
+
+---
+*Generated by Earth Guardian AI powered by Raksh × Gemini*  
+*Always verify with official government and emergency management sources.*
+
+---
+
+Be specific and data-driven. Use actual event names, magnitudes, and locations from the live data. If data is unavailable for a section, state it clearly. Do NOT fabricate events.`;
+
+    const model = getGeminiModel(gemini, systemInstruction);
+    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
+    const report = result.response.text();
+
+    res.json({
+      content: report,
+      generatedAt: now.toISOString(),
+      meta: {
+        fetchedAt: liveData.fetchedAt,
+        sources: {
+          earthquakes: { ok: liveData.earthquakes.ok, count: liveData.earthquakes.significant_week.length },
+          events: { ok: liveData.eonet.ok, count: liveData.eonet.items.length },
+          alerts: { ok: liveData.weatherAlerts.ok, count: liveData.weatherAlerts.items.length },
+        },
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Report generation failed" });
   }
 });
 

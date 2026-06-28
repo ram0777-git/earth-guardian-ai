@@ -1,0 +1,332 @@
+# Earth Guardian AI — Final Hackathon Edition (Engineering Directive)
+
+You are the Principal AI Engineer responsible for transforming Earth Guardian AI into a production-quality AI disaster intelligence platform.
+
+This is not a prototype.
+
+This is a flagship AI system.
+
+## ABSOLUTE RULES
+
+* Never delete existing working code.
+* Never replace working features.
+* Improve architecture incrementally.
+* Preserve the current UI and branding.
+* Keep all APIs, routes, integrations, and live data sources.
+* Every new feature must integrate with the existing application.
+* Every feature must be fully implemented.
+* No placeholders.
+* No TODOs.
+* No mock buttons.
+* No fake responses.
+* Fix every TypeScript error immediately.
+* Fix every runtime error immediately.
+* Validate every feature before finishing.
+
+---
+
+# GOAL
+
+Raksh AI must become the central operating system of Earth Guardian AI.
+
+Every feature in the application should be usable naturally through Raksh AI.
+
+The assistant should not simply answer questions.
+
+It should understand intent, execute actions, generate outputs, and coordinate the application.
+
+---
+
+# INTELLIGENT ACTION ROUTER
+
+Implement an intent router.
+
+Automatically detect whether the user wants:
+
+* Conversation
+* Live disaster information
+* Image analysis
+* Image generation
+* Document analysis
+* Report generation
+* Presentation generation
+* Disaster simulation
+* Map navigation
+* Resource planning
+* Emergency planning
+* Dashboard insights
+
+Route the request automatically.
+
+Users should never need to select a mode manually.
+
+---
+
+# VOICE COPILOT
+
+Implement a complete voice assistant.
+
+Features:
+
+* Wake phrase (optional)
+* Push-to-talk
+* Continuous conversation
+* Auto language detection
+* Natural voice responses
+* Interrupt speech
+* Pause
+* Resume
+* Stop
+* Voice commands
+
+Voice commands should control the application.
+
+Examples:
+
+Open Live Map.
+
+Show active earthquakes.
+
+Zoom to Japan.
+
+Highlight shelters.
+
+Generate emergency report.
+
+Analyze uploaded image.
+
+Create preparedness poster.
+
+---
+
+# MULTIMODAL AI
+
+Raksh AI must seamlessly combine:
+
+* Text
+* Voice
+* Images
+* Documents
+* Live data
+* Maps
+
+A single request may produce multiple outputs.
+
+Example:
+
+"Prepare a flood awareness package."
+
+Return:
+
+* Explanation
+* AI-generated awareness poster
+* Preparedness checklist
+* Downloadable PDF
+* Downloadable PowerPoint
+* Relevant live flood data (if available)
+
+---
+
+# LIVE DISASTER INTELLIGENCE
+
+For questions about current events, prioritize live sources.
+
+Merge information from the existing disaster APIs.
+
+Summarize:
+
+* What happened
+* Where
+* Severity
+* Recommended actions
+* Confidence
+* Source attribution
+
+---
+
+# DISASTER SIMULATION
+
+Build an interactive simulation engine.
+
+Support questions like:
+
+"What if a Category 5 cyclone hits Chennai?"
+
+"What if an M8.7 earthquake strikes Tokyo?"
+
+Generate:
+
+* Timeline
+* Estimated impact
+* Resource requirements
+* Hospital demand
+* Shelter demand
+* Evacuation recommendations
+* Risk score
+* Charts
+* Action plan
+
+---
+
+# MAP AI
+
+Allow Raksh AI to control the map.
+
+Examples:
+
+Show active floods.
+
+Zoom to Indonesia.
+
+Highlight evacuation routes.
+
+Find nearby hospitals.
+
+Highlight shelters.
+
+Synchronize map state with AI responses.
+
+---
+
+# RESOURCE PLANNER
+
+Generate deployment plans for:
+
+Volunteers
+
+Medical teams
+
+Food
+
+Water
+
+Shelters
+
+Transportation
+
+Present the allocation visually where possible.
+
+---
+
+# DOCUMENT SUITE
+
+Support:
+
+* Upload
+* Analysis
+* OCR
+* Summarization
+* PDF generation
+* DOCX generation
+* PPTX generation
+
+Generated reports should include:
+
+Executive summary
+
+Live disaster information
+
+Recommendations
+
+Preparedness checklist
+
+Charts
+
+Professional formatting
+
+Earth Guardian AI branding
+
+Timestamp
+
+---
+
+# IMAGE SUITE
+
+Support both image understanding and image generation.
+
+Generated images should include:
+
+Preparedness posters
+
+Infographics
+
+Shelter layouts
+
+Evacuation diagrams
+
+Educational graphics
+
+Allow:
+
+Download
+
+Regenerate
+
+Variations
+
+---
+
+# USER EXPERIENCE
+
+Enhance:
+
+Animations
+
+Streaming responses
+
+Loading states
+
+Responsive layout
+
+Accessibility
+
+Conversation management
+
+File previews
+
+Message actions
+
+---
+
+# PERFORMANCE
+
+Optimize:
+
+Lazy loading
+
+Caching
+
+Streaming
+
+Retry logic
+
+API usage
+
+Image handling
+
+Build size
+
+---
+
+# FINAL VALIDATION
+
+Before completion:
+
+* Run the application.
+* Fix all build errors.
+* Fix all runtime errors.
+* Fix all TypeScript errors.
+* Verify every route.
+* Verify every API.
+* Verify every page.
+* Verify every button.
+* Verify downloads.
+* Verify reports.
+* Verify presentations.
+* Verify voice mode.
+* Verify image generation.
+* Verify document generation.
+* Verify map integration.
+* Verify disaster simulation.
+
+Do not finish until the application builds successfully with zero new errors and every implemented feature has been tested.
