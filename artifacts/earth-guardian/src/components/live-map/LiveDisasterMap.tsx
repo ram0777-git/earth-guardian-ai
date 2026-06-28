@@ -397,7 +397,7 @@ export function LiveDisasterMap() {
     const lng = parseFloat(result.lon);
     setFlyTarget([lat, lng]);
     /* Importance-based zoom: 0.9+ = country, 0.7+ = city, else town */
-    const zoom = result.importance >= 0.85 ? 5 : result.importance >= 0.6 ? 10 : 13;
+    const zoom = result.zoomHint ?? (result.importance >= 0.85 ? 5 : result.importance >= 0.6 ? 10 : 13);
     setFlyZoom(zoom);
     setSearchLocation(result);
     setShowLocationPanel(true);
