@@ -1,6 +1,5 @@
 import { GlassCard } from "@/components/ui/GlassCard";
 import { teamMembers } from "@/data/sampleData";
-import { Button } from "@/components/ui/button";
 import {
   Award,
   Cloud,
@@ -86,7 +85,12 @@ export function AboutContent() {
             Google Cloud AI integration in the next development phase.
           </p>
         </div>
-        <Button href="/dashboard">Explore Dashboard</Button>
+        <a
+          href="/dashboard"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 text-sm font-bold text-white transition-all hover:opacity-90"
+        >
+          Explore Dashboard
+        </a>
       </GlassCard>
     </>
   );

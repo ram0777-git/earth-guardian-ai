@@ -1,5 +1,5 @@
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { volunteers } from "@/data/sampleData";
 import { Clock, MapPin, Users } from "lucide-react";
 
@@ -57,7 +57,7 @@ export function VolunteerNetworkGrid() {
 
             <div className="mt-4 flex flex-wrap gap-2">
               {volunteer.skills.map((skill) => (
-                <Badge key={skill} variant="info">{skill}</Badge>
+                <Badge key={skill} variant="secondary">{skill}</Badge>
               ))}
             </div>
 

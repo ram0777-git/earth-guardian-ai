@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Button } from "@/components/ui/Button";
+import { AnimatedButton as Button } from "@/components/ui/AnimatedButton";
 import { GlowingBadge } from "./GlowingBadge";
 import { PremiumBackground } from "./PremiumBackground";
 import { ArrowRight, Shield, Globe2, Users, ChevronDown } from "lucide-react";

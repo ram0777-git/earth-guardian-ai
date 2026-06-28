@@ -91,7 +91,7 @@ export function WeatherCard({ loading }: { loading: boolean }) {
         <div className="mt-4">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">5-Day Forecast</p>
           <div className="flex gap-1.5">
-            {w.forecast.map((day, i) => (
+            {w.forecast.map((day: any, i: number) => (
               <motion.div
                 key={day.day}
                 initial={{ opacity: 0, y: 8 }}

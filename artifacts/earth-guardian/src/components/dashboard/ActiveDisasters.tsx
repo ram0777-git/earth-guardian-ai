@@ -55,7 +55,7 @@ export function ActiveDisasters({ loading }: { loading: boolean }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {disasters.map((d, i: number) => {
+        {disasters.map((d: any, i: number) => {
           const Icon = typeIcon[d.type] ?? AlertTriangle;
           const tc   = typeColor[d.type] ?? "#60a5fa";
           const sc   = severityConfig[d.severity] ?? severityConfig.low;

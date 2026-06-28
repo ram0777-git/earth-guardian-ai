@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   X, Brain, MapPin, AlertTriangle, Shield, Clock,
-  Zap, Droplets, Flame, Wind, Waves, Mountain,
-  Hospital, Phone, ChevronRight,
+  Phone, ChevronRight, Thermometer, Wind, Droplets,
+  Eye, Gauge,
 } from "lucide-react";
 import { analyzeLocation } from "@/data/riskData";
 import { DISASTER_TYPE_CONFIG, type DisasterEvent } from "@/data/mapData";
@@ -16,10 +16,69 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* ── WMO weather code → label + emoji ── */
+function wmoLabel(code: number): { label: string; emoji: string } {
+  if (code === 0)                    return { label: "Clear",          emoji: "☀️" };
+  if (code <= 3)                     return { label: "Partly Cloudy",  emoji: "⛅" };
+  if (code <= 48)                    return { label: "Foggy",          emoji: "🌫️" };
+  if (code <= 57)                    return { label: "Drizzle",        emoji: "🌦️" };
+  if (code <= 67)                    return { label: "Rain",           emoji: "🌧️" };
+  if (code <= 77)                    return { label: "Snow",           emoji: "❄️" };
+  if (code <= 82)                    return { label: "Showers",        emoji: "🌦️" };
+  if (code === 95)                   return { label: "Thunderstorm",   emoji: "⛈️" };
+  return                                    { label: "Severe Storm",   emoji: "⛈️" };
+}
+
+/* ── Open-Meteo weather fetch ── */
+interface WeatherData {
+  temp:       number;
+  feelsLike:  number;
+  humidity:   number;
+  windSpeed:  number;
+  code:       number;
+  label:      string;
+  emoji:      string;
+  vis:        number;
+  pressure:   number;
+}
+
+async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  url.searchParams.set("latitude",   lat.toFixed(4));
+  url.searchParams.set("longitude",  lon.toFixed(4));
+  url.searchParams.set("current", [
+    "temperature_2m",
+    "apparent_temperature",
+    "relative_humidity_2m",
+    "wind_speed_10m",
+    "weather_code",
+    "surface_pressure",
+    "visibility",
+  ].join(","));
+  url.searchParams.set("temperature_unit", "fahrenheit");
+  url.searchParams.set("wind_speed_unit",  "mph");
+  const res  = await fetch(url.toString());
+  const json = await res.json();
+  const c = json.current;
+  const { label, emoji } = wmoLabel(c.weather_code);
+  return {
+    temp:      Math.round(c.temperature_2m),
+    feelsLike: Math.round(c.apparent_temperature),
+    humidity:  Math.round(c.relative_humidity_2m),
+    windSpeed: Math.round(c.wind_speed_10m),
+    code:      c.weather_code,
+    label, emoji,
+    vis:      Math.round((c.visibility ?? 10000) / 1000),
+    pressure: Math.round(c.surface_pressure ?? 1013),
+  };
+}
+
+/* ── Constants ── */
 const SEV_COLOR: Record<string, string> = {
   critical: "#ef4444",
   high:     "#f97316",
@@ -29,33 +88,50 @@ const SEV_COLOR: Record<string, string> = {
 
 const LEVEL_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
   critical: { color: "#ef4444", bg: "rgba(239,68,68,0.12)",  label: "CRITICAL" },
-  high:     { color: "#f97316", bg: "rgba(249,115,22,0.12)", label: "HIGH" },
+  high:     { color: "#f97316", bg: "rgba(249,115,22,0.12)", label: "HIGH"     },
   moderate: { color: "#f59e0b", bg: "rgba(245,158,11,0.12)", label: "MODERATE" },
-  low:      { color: "#34d399", bg: "rgba(52,211,153,0.12)", label: "LOW" },
+  low:      { color: "#34d399", bg: "rgba(52,211,153,0.12)", label: "LOW"      },
 };
 
 const EMERGENCY_SERVICES = [
-  { name: "Emergency Services", number: "911", emoji: "🚨", desc: "Police, Fire, Ambulance" },
-  { name: "FEMA Helpline",      number: "1-800-621-3362", emoji: "🏛️", desc: "Federal disaster assistance" },
-  { name: "Red Cross",          number: "1-800-RED-CROSS", emoji: "🏥", desc: "Emergency shelter & relief" },
-  { name: "Crisis Hotline",     number: "988", emoji: "💬", desc: "Mental health crisis support" },
+  { name: "Emergency Services", number: "911",              emoji: "🚨", desc: "Police, Fire, Ambulance"    },
+  { name: "FEMA Helpline",      number: "1-800-621-3362",   emoji: "🏛️", desc: "Federal disaster assistance" },
+  { name: "Red Cross",          number: "1-800-RED-CROSS",  emoji: "🏥", desc: "Emergency shelter & relief"  },
+  { name: "Crisis Hotline",     number: "988",              emoji: "💬", desc: "Mental health crisis support" },
 ];
 
+/* ── Props ── */
 interface Props {
   location: NominatimResult;
-  events: DisasterEvent[];
-  onClose: () => void;
+  events:   DisasterEvent[];
+  onClose:  () => void;
   onSelectEvent: (e: DisasterEvent) => void;
 }
 
 export function LocationPanel({ location, events, onClose, onSelectEvent }: Props) {
-  const lat = parseFloat(location.lat);
-  const lng = parseFloat(location.lon);
+  const lat      = parseFloat(location.lat);
+  const lng      = parseFloat(location.lon);
   const shortName = location.display_name.split(",").slice(0, 2).join(",").trim();
 
-  const risk = useMemo(() => analyzeLocation(shortName), [shortName]);
+  /* AI risk */
+  const risk     = useMemo(() => analyzeLocation(shortName), [shortName]);
+  const levelCfg = LEVEL_CONFIG[risk.level] ?? LEVEL_CONFIG.low;
 
-  /* Nearby events sorted by distance, max 500 km */
+  /* Open-Meteo weather */
+  const [weather, setWeather]   = useState<WeatherData | null>(null);
+  const [wxLoading, setWxLoading] = useState(true);
+  const [wxError,   setWxError]   = useState(false);
+
+  useEffect(() => {
+    setWeather(null);
+    setWxLoading(true);
+    setWxError(false);
+    fetchWeather(lat, lng)
+      .then(w => { setWeather(w); setWxLoading(false); })
+      .catch(() => { setWxError(true); setWxLoading(false); });
+  }, [lat, lng]);
+
+  /* Nearby events */
   const nearby = useMemo(() => {
     return events
       .map(e => ({ ...e, distKm: haversine(lat, lng, e.lat, e.lng) }))
@@ -63,8 +139,6 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
       .sort((a, b) => a.distKm - b.distKm)
       .slice(0, 8);
   }, [events, lat, lng]);
-
-  const levelCfg = LEVEL_CONFIG[risk.level] ?? LEVEL_CONFIG.low;
 
   return (
     <motion.aside
@@ -75,7 +149,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
       className="relative z-20 flex w-80 flex-shrink-0 flex-col border-l border-white/6 bg-[#06121F]/98 backdrop-blur-xl overflow-hidden"
       style={{ boxShadow: "-4px 0 32px rgba(0,0,0,0.5)" }}
     >
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-start justify-between border-b border-white/6 p-4 flex-shrink-0">
         <div className="flex-1 min-w-0 pr-2">
           <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-1">
@@ -94,7 +168,58 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* AI Risk Score */}
+
+        {/* ── Live Weather ── */}
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2.5 flex items-center gap-1.5">
+            <Thermometer className="h-3 w-3 text-blue-400" /> Current Weather
+          </p>
+          {wxLoading && (
+            <div className="flex items-center gap-2 text-xs text-slate-400 animate-pulse">
+              <div className="h-8 w-8 rounded-full bg-white/10 flex-shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-2.5 rounded bg-white/10 w-3/4" />
+                <div className="h-2 rounded bg-white/8 w-1/2" />
+              </div>
+            </div>
+          )}
+          {wxError && !wxLoading && (
+            <p className="text-[11px] text-slate-500 text-center py-1">Weather unavailable</p>
+          )}
+          {weather && !wxLoading && (
+            <>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-3xl leading-none flex-shrink-0">{weather.emoji}</span>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-white">{weather.temp}°</span>
+                    <span className="text-sm text-slate-400">F</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{weather.label} · Feels {weather.feelsLike}°F</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { icon: Droplets, label: "Humidity",   val: `${weather.humidity}%`,    color: "#22d3ee" },
+                  { icon: Wind,     label: "Wind",        val: `${weather.windSpeed} mph`, color: "#818cf8" },
+                  { icon: Eye,      label: "Visibility",  val: `${weather.vis} km`,        color: "#34d399" },
+                ].map(({ icon: Icon, label, val, color }) => (
+                  <div key={label}
+                    className="flex flex-col items-center gap-1 rounded-lg border border-white/6 bg-white/[0.03] p-2 text-center">
+                    <Icon className="h-3 w-3" style={{ color }} />
+                    <span className="text-[9px] text-slate-500">{label}</span>
+                    <span className="text-[10px] font-bold text-white">{val}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-center text-[9px] text-slate-600">
+                Source: Open-Meteo · {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* ── AI Risk Score ── */}
         <div
           className="rounded-xl p-4"
           style={{ background: levelCfg.bg, border: `1px solid ${levelCfg.color}30` }}
@@ -110,7 +235,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
             </span>
           </div>
 
-          {/* Score ring + categories */}
+          {/* Score ring */}
           <div className="flex items-center gap-3 mb-3">
             <div className="relative flex-shrink-0">
               <svg width="64" height="64" viewBox="0 0 64 64">
@@ -149,7 +274,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-300 leading-relaxed">{risk.explanation}</p>
+          <p className="text-[11px] text-slate-300 leading-relaxed line-clamp-3">{risk.explanation.split("\n")[0]}</p>
 
           {/* Confidence */}
           <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-500">
@@ -160,7 +285,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           </div>
         </div>
 
-        {/* Coordinates */}
+        {/* ── Coordinates ── */}
         <div className="rounded-xl border border-white/6 bg-white/[0.02] px-3 py-2.5 flex items-center gap-3">
           <MapPin className="h-3.5 w-3.5 text-cyan-400 flex-shrink-0" />
           <div>
@@ -169,7 +294,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           </div>
         </div>
 
-        {/* Top AI Recommendations */}
+        {/* ── AI Recommendations ── */}
         {risk.recommendations.length > 0 && (
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
@@ -190,7 +315,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           </div>
         )}
 
-        {/* Nearby disaster events */}
+        {/* ── Nearby active events ── */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
             <AlertTriangle className="h-3 w-3" />
@@ -205,9 +330,11 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           ) : (
             <div className="space-y-1.5">
               {nearby.map(e => {
-                const cfg = DISASTER_TYPE_CONFIG[e.type];
-                const sc = SEV_COLOR[e.severity];
-                const distStr = e.distKm < 100 ? `${Math.round(e.distKm)} km` : `${Math.round(e.distKm / 10) * 10} km`;
+                const cfg     = DISASTER_TYPE_CONFIG[e.type];
+                const sc      = SEV_COLOR[e.severity];
+                const distStr = e.distKm < 100
+                  ? `${Math.round(e.distKm)} km`
+                  : `${Math.round(e.distKm / 10) * 10} km`;
                 return (
                   <motion.button
                     key={e.id}
@@ -235,7 +362,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           )}
         </div>
 
-        {/* Emergency services */}
+        {/* ── Emergency contacts ── */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
             <Phone className="h-3 w-3" /> Emergency Contacts
@@ -254,7 +381,7 @@ export function LocationPanel({ location, events, onClose, onSelectEvent }: Prop
           </div>
         </div>
 
-        {/* Last updated */}
+        {/* ── Timestamp ── */}
         <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
           <Clock className="h-3 w-3" />
           Analysis updated: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

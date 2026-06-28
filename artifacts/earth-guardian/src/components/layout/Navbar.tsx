@@ -1,7 +1,7 @@
 
 
 import { navLinks } from "@/data/sampleData";
-import { Button } from "@/components/ui/Button";
+import { AnimatedButton as Button } from "@/components/ui/AnimatedButton";
 import { cn } from "@/lib/utils";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Globe2, Menu, X } from "lucide-react";

@@ -1,5 +1,5 @@
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { riskFactors, overallRiskScore } from "@/data/sampleData";
 import { Shield, AlertTriangle } from "lucide-react";
 
@@ -33,7 +33,7 @@ export function RiskAnalysisOverview() {
                   <AlertTriangle className="h-4 w-4 text-primary" />
                   <span className="font-medium text-slate-900">{factor.name}</span>
                 </div>
-                <Badge variant={factor.level}>{factor.level}</Badge>
+                <Badge variant="secondary">{factor.level}</Badge>
               </div>
               <div className="mt-3 flex items-end gap-2">
                 <span className="text-2xl font-bold text-primary">{factor.score}</span>

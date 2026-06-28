@@ -1,15 +1,15 @@
 
 
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { emergencySteps } from "@/data/sampleData";
 import { CheckCircle2, Circle, ClipboardCheck } from "lucide-react";
 import { useState } from "react";
 
 const priorityVariants = {
-  essential: "critical" as const,
-  recommended: "moderate" as const,
-  optional: "low" as const,
+  essential: "destructive" as const,
+  recommended: "secondary" as const,
+  optional: "outline" as const,
 };
 
 export function EmergencyPlannerChecklist() {

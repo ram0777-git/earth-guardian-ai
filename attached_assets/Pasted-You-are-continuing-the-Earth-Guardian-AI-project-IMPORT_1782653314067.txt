@@ -1,0 +1,274 @@
+You are continuing the Earth Guardian AI project.
+
+IMPORTANT RULES
+
+- Do NOT analyze the entire repository repeatedly.
+- Read only the files necessary for the requested implementation.
+- Do NOT redesign the application.
+- Do NOT replace existing architecture.
+- Do NOT modify package.json unless absolutely required.
+- Do NOT change Vite, Tailwind, routing, or project structure.
+- Reuse all existing components.
+- Reuse existing APIs.
+- Reuse existing utilities.
+- Keep the UI consistent.
+- Minimize token usage.
+- Implement directly.
+
+====================================================
+
+PROJECT STATUS
+
+Infrastructure is complete.
+
+Frontend is complete.
+
+Dashboard is complete.
+
+Emergency Planner is complete.
+
+Risk Analysis is complete.
+
+Production optimizations are complete.
+
+Live Map exists but needs professional polish.
+
+Focus ONLY on improving the existing implementation.
+
+====================================================
+
+TASK 1 — PROFESSIONAL LIVE MAP
+
+Keep React Leaflet.
+
+Do NOT migrate to Google Maps.
+
+Upgrade the search using Photon (preferred) or OpenStreetMap Nominatim.
+
+Requirements:
+
+✓ Global autocomplete
+
+✓ Countries
+
+✓ States
+
+✓ Districts
+
+✓ Cities
+
+✓ Towns
+
+✓ Villages
+
+✓ Hamlets
+
+✓ Streets
+
+✓ Landmarks
+
+✓ Postal codes
+
+✓ Latitude/Longitude
+
+Implement:
+
+• debounced search
+
+• cached search
+
+• keyboard navigation
+
+• loading indicator
+
+• no duplicate requests
+
+When user selects a location:
+
+• smooth flyTo()
+
+• animated marker
+
+• popup
+
+• nearby disasters
+
+• weather refresh
+
+• AI risk refresh
+
+• emergency resources refresh
+
+====================================================
+
+TASK 2 — LOCATION INTELLIGENCE
+
+When searching any place automatically display:
+
+Current weather
+
+Disaster risk
+
+Nearby earthquakes
+
+Nearby floods
+
+Nearby wildfires
+
+Nearby storms
+
+Nearby hospitals
+
+Nearby shelters
+
+Nearby fire stations
+
+Nearby police stations
+
+Emergency contacts
+
+Preparedness score
+
+AI recommendations
+
+====================================================
+
+TASK 3 — AI IMPROVEMENTS
+
+Replace generic outputs with intelligent explanations.
+
+Instead of:
+
+"High Risk"
+
+Generate:
+
+• Why risk is high
+
+• Historical context
+
+• Current weather influence
+
+• Disaster probability
+
+• AI confidence
+
+• Recommended actions
+
+• Estimated impact
+
+====================================================
+
+TASK 4 — REMOVE MOCK DATA
+
+Audit the existing project.
+
+Replace remaining placeholder or hardcoded values with real API data wherever available.
+
+Do not invent fake data.
+
+====================================================
+
+TASK 5 — UI POLISH
+
+Improve:
+
+spacing
+
+alignment
+
+responsiveness
+
+loading states
+
+empty states
+
+error handling
+
+hover effects
+
+animations
+
+Ensure every page feels production quality.
+
+====================================================
+
+TASK 6 — PERFORMANCE
+
+Improve:
+
+lazy loading
+
+memoization
+
+rerender optimization
+
+API caching
+
+bundle efficiency
+
+====================================================
+
+TASK 7 — QUALITY ASSURANCE
+
+Verify every page:
+
+Home
+
+Dashboard
+
+Risk Analysis
+
+Live Map
+
+Emergency Planner
+
+Volunteers
+
+About
+
+Ensure:
+
+✓ no runtime errors
+
+✓ no TypeScript errors
+
+✓ responsive design
+
+✓ working APIs
+
+✓ working charts
+
+✓ working map
+
+✓ working navigation
+
+====================================================
+
+DO NOT
+
+Do not redesign.
+
+Do not create new pages.
+
+Do not rewrite unrelated code.
+
+Do not waste tokens explaining.
+
+Implement directly.
+
+====================================================
+
+WHEN FINISHED
+
+Provide ONLY:
+
+1. Files modified
+
+2. Features completed
+
+3. Remaining work (if any)
+
+4. Build status
+
+5. Git commit message suggestion

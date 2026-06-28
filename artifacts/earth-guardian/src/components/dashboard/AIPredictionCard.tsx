@@ -95,7 +95,7 @@ export function AIPredictionCard({ loading }: { loading: boolean }) {
         <div className="mt-5">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Contributing Factors</p>
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {ai.factors.map((f, i) => (
+            {ai.factors.map((f: any, i: number) => (
               <motion.div
                 key={f.label}
                 initial={{ opacity: 0, x: -8 }}

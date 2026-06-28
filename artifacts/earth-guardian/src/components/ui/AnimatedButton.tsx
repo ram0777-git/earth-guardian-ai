@@ -1,5 +1,3 @@
-
-
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
@@ -78,7 +76,7 @@ function ButtonContent({
   );
 }
 
-export function Button({
+export function AnimatedButton({
   children,
   variant = "primary",
   size = "md",

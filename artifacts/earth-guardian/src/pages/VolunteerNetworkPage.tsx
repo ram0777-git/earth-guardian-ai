@@ -1,6 +1,6 @@
 import { PageShell } from "@/components/layout/PageShell";
 import { VolunteerNetworkGrid } from "@/components/volunteer-network/VolunteerNetworkGrid";
-import { Button } from "@/components/ui/Button";
+import { AnimatedButton as Button } from "@/components/ui/AnimatedButton";
 import { UserPlus } from "lucide-react";
 
 export default function VolunteerNetworkPage() {

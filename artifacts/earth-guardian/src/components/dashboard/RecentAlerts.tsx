@@ -45,7 +45,7 @@ export function RecentAlerts({ loading }: { loading: boolean }) {
       </div>
 
       <div className="divide-y divide-white/4">
-        {alerts.map((alert, i: number) => {
+        {alerts.map((alert: any, i: number) => {
           const sev = severityConfig[alert.severity] ?? severityConfig.low;
           return (
             <motion.div

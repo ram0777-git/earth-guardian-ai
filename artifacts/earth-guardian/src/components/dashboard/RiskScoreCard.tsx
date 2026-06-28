@@ -96,7 +96,7 @@ export function RiskScoreCard({ loading }: { loading: boolean }) {
       {/* Risk factors */}
       <div className="mt-4 space-y-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Top Risk Factors</p>
-        {riskFactors.slice(0, 4).map((rf, i) => (
+        {riskFactors.slice(0, 4).map((rf: any, i: number) => (
           <motion.div
             key={rf.id}
             initial={{ opacity: 0, x: -8 }}

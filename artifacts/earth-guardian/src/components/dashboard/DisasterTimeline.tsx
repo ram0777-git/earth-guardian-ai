@@ -63,7 +63,7 @@ export function DisasterTimeline({ loading }: { loading: boolean }) {
         <div className="absolute left-[13px] top-2 bottom-2 w-px bg-gradient-to-b from-cyan/40 via-primary/30 to-transparent" />
 
         <div className="space-y-4">
-          {timelineEvents.map((ev, i) => {
+          {timelineEvents.map((ev: any, i: number) => {
             const Icon = typeIcon[ev.type] ?? Activity;
             const sc = statusConfig[ev.status] ?? statusConfig.monitoring;
             const tc = typeColor[ev.type] ?? "#60a5fa";
