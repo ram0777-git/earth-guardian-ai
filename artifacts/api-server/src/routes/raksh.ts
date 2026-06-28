@@ -18,15 +18,17 @@ import {
 const router = Router();
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash-lite: confirmed available and working with this API key
+const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 const TIMEOUT_MS = 60_000;
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 1;
 
 // ── AI Provider Manager ────────────────────────────────────────────────────────
 interface ProviderStatus {
   name: string;
   available: boolean;
   failedAt?: number;
+  cooldownMs?: number;
 }
 
 const providerStatus: Record<string, ProviderStatus> = {
@@ -39,22 +41,34 @@ function isProviderCooledDown(name: string): boolean {
   const s = providerStatus[name];
   if (!s) return false;
   if (s.available) return true;
-  // 5 minute cooldown
-  if (s.failedAt && Date.now() - s.failedAt > 5 * 60_000) {
+  const cooldown = s.cooldownMs ?? 5 * 60_000;
+  if (s.failedAt && Date.now() - s.failedAt > cooldown) {
     s.available = true;
     s.failedAt = undefined;
+    s.cooldownMs = undefined;
     return true;
   }
   return false;
 }
 
-function markProviderFailed(name: string) {
+function markProviderFailed(name: string, cooldownMs?: number) {
   const s = providerStatus[name];
-  if (s) { s.available = false; s.failedAt = Date.now(); }
+  if (s) {
+    s.available = false;
+    s.failedAt = Date.now();
+    s.cooldownMs = cooldownMs;
+  }
 }
 
-function isRetryableError(msg: string): boolean {
-  return /429|500|503|overloaded|timeout|quota|exceeded|UNAVAILABLE|rate.limit/i.test(msg);
+/** Daily quota exhausted — no point retrying until tomorrow */
+function isQuotaExhaustedError(msg: string): boolean {
+  return /free.tier|GenerateRequestsPerDay|quota.*day|daily.*limit|per_day/i.test(msg);
+}
+
+/** Transient rate limit or server error — safe to retry after backoff */
+function isTransientError(msg: string): boolean {
+  return /500|503|overloaded|timeout|UNAVAILABLE/i.test(msg) ||
+    (/429/.test(msg) && !isQuotaExhaustedError(msg));
 }
 
 function getGeminiClient(): { genAI: GoogleGenerativeAI; model: string } | null {
@@ -700,12 +714,21 @@ router.post("/raksh/chat", async (req, res) => {
       } catch (err: unknown) {
         attempt++;
         const message = err instanceof Error ? err.message : "Gemini request failed";
-        const retryable = isRetryableError(message);
-        if (retryable && attempt <= MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 1000 * attempt));
+        console.error(`[Raksh] Gemini attempt ${attempt} error:`, message.slice(0, 200));
+
+        if (isQuotaExhaustedError(message)) {
+          // Daily quota hit — cool down for 1 hour, no point retrying
+          markProviderFailed("gemini", 60 * 60_000);
+          console.warn("[Raksh] Gemini daily quota exhausted — switching to fallback providers.");
+          break;
+        }
+        if (isTransientError(message) && attempt <= MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 800 * attempt));
           continue;
         }
-        if (retryable) markProviderFailed("gemini");
+        if (isTransientError(message)) {
+          markProviderFailed("gemini", 5 * 60_000);
+        }
         break;
       }
     }
@@ -713,7 +736,11 @@ router.post("/raksh/chat", async (req, res) => {
   }
 
   // ── Fallback: notify user then try OpenRouter / Groq ─────────────────────
-  res.write(`data: ${JSON.stringify({ content: "Primary AI is temporarily unavailable. Switching to backup AI...\n\n" })}\n\n`);
+  const hasBackup = (isProviderCooledDown("openrouter") && !!process.env["OPENROUTER_API_KEY"]) ||
+                    (isProviderCooledDown("groq") && !!process.env["GROQ_API_KEY"]);
+  if (hasBackup) {
+    res.write(`data: ${JSON.stringify({ content: "Primary AI is temporarily unavailable. Switching to backup AI...\n\n" })}\n\n`);
+  }
 
   // Try OpenRouter
   if (isProviderCooledDown("openrouter") && process.env["OPENROUTER_API_KEY"]) {

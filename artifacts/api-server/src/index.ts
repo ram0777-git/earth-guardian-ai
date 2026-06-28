@@ -1,13 +1,9 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
-console.log("Gemini API Loaded:", !!process.env.GEMINI_API_KEY);
-
-if (!process.env.GEMINI_API_KEY) {
-  console.error("[Raksh] GEMINI_API_KEY is missing from environment — Raksh AI will not function.");
-} else {
-  console.log("[Raksh] GEMINI_API_KEY detected, Gemini will initialize on first request.");
-}
+const geminiKeyPresent = !!process.env.GEMINI_API_KEY;
+console.log("Gemini Loaded:", geminiKeyPresent);
+console.log("[Raksh] Model: gemini-2.5-flash-lite |", geminiKeyPresent ? "Key detected — Gemini ready" : "GEMINI_API_KEY not set — AI will not function");
 
 const rawPort = process.env["PORT"];
 
