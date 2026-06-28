@@ -1,0 +1,205 @@
+You are a Senior Full-Stack GIS Engineer.
+
+The Earth Guardian AI project already has a working React Leaflet Live Map.
+
+IMPORTANT
+
+DO NOT replace Leaflet.
+
+DO NOT migrate to Google Maps.
+
+DO NOT redesign the application.
+
+DO NOT modify unrelated pages.
+
+DO NOT rewrite existing map functionality.
+
+Preserve all existing disaster layers, overlays, clustering, heatmap, filters, AI panels, weather integration, and UI.
+
+Only improve the location search experience.
+
+=====================================================
+
+OBJECTIVE
+
+Upgrade the Live Map search so it provides a Google Maps–quality search experience while continuing to use React Leaflet for rendering.
+
+=====================================================
+
+GOOGLE MAPS PLATFORM
+
+Integrate only the following Google services:
+
+• Places API (Autocomplete)
+• Geocoding API
+
+Use an environment variable for the API key.
+
+Never hardcode secrets.
+
+=====================================================
+
+SEARCH EXPERIENCE
+
+Replace the current search implementation.
+
+Requirements
+
+Users must be able to search:
+
+• Countries
+• States
+• Districts
+• Cities
+• Towns
+• Villages
+• Hamlets
+• Streets
+• Landmarks
+• Schools
+• Hospitals
+• Rivers
+• Mountains
+• Lakes
+• Postal / ZIP codes
+• Latitude / Longitude
+
+Autocomplete suggestions must appear while typing.
+
+Implement:
+
+• debounced search
+• keyboard navigation
+• mouse selection
+• ranked results
+• recent searches
+• clear search
+• loading indicator
+• error handling
+
+=====================================================
+
+WHEN USER SELECTS A RESULT
+
+Immediately:
+
+• Geocode the selected location.
+• Smoothly fly the Leaflet map to that position.
+• Automatically calculate the correct zoom level.
+• Drop an animated highlighted marker.
+• Open a popup.
+• Update nearby disasters.
+• Update AI Risk Panel.
+• Update weather.
+• Update emergency services.
+• Update statistics.
+
+=====================================================
+
+DISASTER INTELLIGENCE
+
+After every successful search:
+
+Automatically refresh:
+
+• Earthquakes
+• Floods
+• Wildfires
+• Cyclones
+• Storms
+• Weather
+• AI Risk Score
+• Preparedness Score
+
+Use the existing APIs already implemented in the project.
+
+Do not remove existing functionality.
+
+=====================================================
+
+USER EXPERIENCE
+
+The search should feel similar to Google Maps.
+
+Requirements:
+
+• Fast
+• Smooth
+• Responsive
+• Accurate
+• Able to find very small villages whenever they exist in Google Places.
+
+=====================================================
+
+PERFORMANCE
+
+Implement:
+
+• request debouncing
+• API response caching
+• prevent duplicate requests
+• efficient rerendering
+• lazy loading where appropriate
+
+=====================================================
+
+FILES
+
+Only modify files required for:
+
+• LiveDisasterMap
+• Search components
+• Google Places integration
+• API utilities
+• Environment configuration
+
+Do not modify unrelated components.
+
+=====================================================
+
+VALIDATION
+
+Verify:
+
+✓ Small villages can be searched.
+
+✓ Towns can be searched.
+
+✓ Cities can be searched.
+
+✓ Countries can be searched.
+
+✓ Search autocomplete works.
+
+✓ Selecting a location smoothly moves the Leaflet map.
+
+✓ Disaster information refreshes.
+
+✓ Existing clustering still works.
+
+✓ Existing heatmap still works.
+
+✓ Existing filters still work.
+
+✓ No TypeScript errors.
+
+✓ No runtime errors.
+
+✓ Project builds successfully.
+
+=====================================================
+
+STOP CONDITIONS
+
+If additional Google APIs would be required beyond Places API and Geocoding API, stop and clearly explain why before making unrelated changes.
+
+Do not waste tokens on explanations.
+
+Focus on implementation.
+
+At the end provide only:
+
+1. Files modified.
+2. Google APIs integrated.
+3. Environment variables required.
+4. Manual setup steps (if any).
