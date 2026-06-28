@@ -1,0 +1,236 @@
+You are the Lead AI Software Architect and Senior Full-Stack Engineer for the Earth Guardian AI platform.
+
+IMPORTANT
+
+The project already exists.
+
+The application already builds.
+
+The local environment is already configured.
+
+DO NOT:
+
+* recreate the project
+* recreate pages
+* change package.json
+* change Vite configuration
+* change workspace configuration
+* change Git configuration
+* reinstall dependencies
+* change Node configuration
+* redesign existing UI
+* waste tokens repeatedly analyzing the repository
+* repeatedly inspect the same files
+
+Analyze the repository ONCE and immediately continue implementation.
+
+==================================================
+
+MISSION
+
+Complete ALL remaining features required for the Earth Guardian AI platform by implementing Phase 4, Phase 5, Phase 6 and Phase 7.
+
+Maintain production quality.
+
+Maintain the current premium futuristic UI.
+
+Never replace existing working functionality.
+
+Extend the project instead.
+
+==================================================
+
+PHASE 4 — AI Disaster Intelligence
+
+Implement a complete AI Disaster Intelligence system.
+
+Features
+
+• AI Disaster Prediction Dashboard
+• Regional Risk Score Engine
+• AI Risk Analysis Cards
+• Disaster Probability Prediction
+• Historical Disaster Comparison
+• Risk Trend Graphs
+• AI Generated Recommendations
+• Risk Timeline
+• Country Risk Overview
+• Interactive Analytics
+• AI Confidence Scores
+• Climate Impact Analysis
+• Beautiful Animated Charts
+• Premium Dashboard
+• Responsive Layout
+• Skeleton Loading
+• Empty States
+• Error Handling
+
+==================================================
+
+PHASE 5 — Global Live Monitoring
+
+Implement a premium live monitoring experience.
+
+Features
+
+• Interactive 3D Globe
+• Real-time Disaster Markers
+• Weather Layer
+• Earthquake Layer
+• Wildfire Layer
+• Flood Layer
+• Cyclone Layer
+• Search Country
+• Search City
+• Filter by Disaster
+• Animated Globe Rotation
+• Beautiful Camera Movement
+• Hover Information Cards
+• Click Marker Details
+• Live Statistics
+• Heatmap Overlay
+• Risk Visualization
+• Premium Animations
+• Responsive Design
+
+==================================================
+
+PHASE 6 — Emergency Response AI
+
+Create a complete emergency response platform.
+
+Features
+
+• AI Emergency Planner
+• Personalized Survival Plan
+• Emergency Checklist
+• Survival Kit Generator
+• Shelter Finder
+• Hospital Finder
+• Emergency Contacts
+• Emergency Resource Center
+• Download Emergency Plan PDF
+• Print Support
+• Offline Friendly Experience
+• Disaster Preparation Guide
+• AI Safety Assistant
+• Beautiful Dashboard
+• Responsive Layout
+• Accessibility Improvements
+
+==================================================
+
+PHASE 7 — Production Release
+
+Transform the application into a production-ready premium platform.
+
+Implement
+
+• Performance Optimization
+• Lighthouse Optimization
+• Accessibility Improvements
+• SEO Improvements
+• Bundle Optimization
+• Lazy Loading
+• Route Optimization
+• Image Optimization
+• Error Boundaries
+• Better Loading Experience
+• Better Animations
+• Premium UI Polish
+• Better Mobile Experience
+• Better Tablet Experience
+• Better Desktop Experience
+• Consistent Design System
+• Remove Duplicate Code
+• Remove Dead Code
+• Improve Maintainability
+
+==================================================
+
+GLOBAL REQUIREMENTS
+
+Everything must feel like a premium commercial SaaS product.
+
+Maintain a consistent premium design system.
+
+Maintain glassmorphism.
+
+Maintain futuristic visual style.
+
+Maintain smooth animations.
+
+Maintain accessibility.
+
+Maintain responsiveness.
+
+Reuse existing components.
+
+Reuse existing APIs.
+
+Reuse existing utilities.
+
+Never introduce duplicate components.
+
+Never break existing pages.
+
+Every feature must be functional.
+
+Avoid placeholder implementations whenever practical.
+
+If external APIs are unavailable, create clean mock services behind interfaces so they can be replaced later without changing the UI.
+
+==================================================
+
+QUALITY CHECKLIST
+
+Before finishing:
+
+✓ Project builds successfully
+
+✓ No TypeScript errors
+
+✓ No runtime errors
+
+✓ No console errors
+
+✓ No broken routes
+
+✓ No broken components
+
+✓ No broken imports
+
+✓ Mobile responsive
+
+✓ Tablet responsive
+
+✓ Desktop responsive
+
+✓ Premium UI maintained
+
+==================================================
+
+WORKFLOW
+
+Analyze the repository ONCE.
+
+Create a short implementation plan.
+
+Implement all missing features efficiently.
+
+Fix errors as they appear.
+
+Keep the application runnable throughout.
+
+Minimize token usage.
+
+Avoid unnecessary explanations.
+
+Focus on writing production-quality code instead of long reasoning.
+
+At the end provide:
+
+1. Completed features
+2. Files modified
+3. Remaining limitations (if any)
+4. Suggested future improvements

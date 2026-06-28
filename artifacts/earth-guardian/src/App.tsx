@@ -1,31 +1,55 @@
+import { Suspense, lazy } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AppProviders } from "@/components/providers/AppProviders";
-import HomePage from "@/pages/HomePage";
-import DashboardPage from "@/pages/DashboardPage";
-import RiskAnalysisPage from "@/pages/RiskAnalysisPage";
-import LiveMapPage from "@/pages/LiveMapPage";
-import EmergencyPlannerPage from "@/pages/EmergencyPlannerPage";
-import VolunteerNetworkPage from "@/pages/VolunteerNetworkPage";
-import AboutPage from "@/pages/AboutPage";
-import NotFound from "@/pages/not-found";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-const queryClient = new QueryClient();
+const HomePage             = lazy(() => import("@/pages/HomePage"));
+const DashboardPage        = lazy(() => import("@/pages/DashboardPage"));
+const RiskAnalysisPage     = lazy(() => import("@/pages/RiskAnalysisPage"));
+const LiveMapPage          = lazy(() => import("@/pages/LiveMapPage"));
+const EmergencyPlannerPage = lazy(() => import("@/pages/EmergencyPlannerPage"));
+const VolunteerNetworkPage = lazy(() => import("@/pages/VolunteerNetworkPage"));
+const AboutPage            = lazy(() => import("@/pages/AboutPage"));
+const NotFound             = lazy(() => import("@/pages/not-found"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime:  30_000,
+      gcTime:     5 * 60_000,
+      retry: 1,
+    },
+  },
+});
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
+        <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    </div>
+  );
+}
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={HomePage} />
-      <Route path="/dashboard" component={DashboardPage} />
-      <Route path="/risk-analysis" component={RiskAnalysisPage} />
-      <Route path="/live-map" component={LiveMapPage} />
-      <Route path="/emergency-planner" component={EmergencyPlannerPage} />
-      <Route path="/volunteer-network" component={VolunteerNetworkPage} />
-      <Route path="/about" component={AboutPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageFallback />}>
+      <Switch>
+        <Route path="/"                   component={HomePage} />
+        <Route path="/dashboard"          component={DashboardPage} />
+        <Route path="/risk-analysis"      component={RiskAnalysisPage} />
+        <Route path="/live-map"           component={LiveMapPage} />
+        <Route path="/emergency-planner"  component={EmergencyPlannerPage} />
+        <Route path="/volunteer-network"  component={VolunteerNetworkPage} />
+        <Route path="/about"              component={AboutPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -33,13 +57,17 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <AppProviders>
-          <Navbar />
-          <main className="flex-1">
-            <Router />
-          </main>
-          <Footer />
-        </AppProviders>
+        <ErrorBoundary>
+          <AppProviders>
+            <Navbar />
+            <main className="flex-1">
+              <ErrorBoundary>
+                <Router />
+              </ErrorBoundary>
+            </main>
+            <Footer />
+          </AppProviders>
+        </ErrorBoundary>
       </WouterRouter>
     </QueryClientProvider>
   );
