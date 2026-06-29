@@ -24,13 +24,20 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
 // ── Constants ──────────────────────────────────────────────────────────────────
 const TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 1;
+const SERVER_START = Date.now();
+const VERSION = "2.0.0";
 
 // ── Error classification ───────────────────────────────────────────────────────
 function isQuotaError(msg: string): boolean {
   return /free.tier|GenerateRequestsPerDay|quota.*day|daily.*limit|per_day/i.test(msg);
 }
 
+function isAuthError(msg: string): boolean {
+  return /401|403|API_KEY_INVALID|invalid.?api.?key|unauthorized|forbidden/i.test(msg);
+}
+
 function isTransientError(msg: string): boolean {
+  if (isAuthError(msg) || isQuotaError(msg)) return false;
   return /500|503|overloaded|timeout|UNAVAILABLE/i.test(msg) ||
     (/429/.test(msg) && !isQuotaError(msg));
 }
@@ -100,10 +107,25 @@ class AIProviderManager {
     temperature = 0.7,
     maxOutputTokens = 8192,
   ): Promise<string> {
-    if (!isGeminiReady()) throw new Error("Gemini API key not configured");
-    const model = getGeminiGenerativeModel(systemInstruction, temperature, maxOutputTokens);
-    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-    return result.response.text();
+    if (!isGeminiReady()) {
+      throw new Error(
+        "Configuration Error: GEMINI_API_KEY not found in Replit Secrets.",
+      );
+    }
+    try {
+      const model = getGeminiGenerativeModel(systemInstruction, temperature, maxOutputTokens);
+      const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
+      return result.response.text();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isAuthError(msg)) {
+        throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
+      }
+      if (isQuotaError(msg)) {
+        throw new Error("Gemini daily quota reached. Please try again later.");
+      }
+      throw err;
+    }
   }
 
   /** Multimodal image analysis — Gemini only. Throws if not ready. */
@@ -113,18 +135,35 @@ class AIProviderManager {
     mimeType: string,
     prompt: string,
   ): Promise<string> {
-    if (!isGeminiReady()) throw new Error("Gemini API key not configured");
-    const model = getGeminiGenerativeModel(systemInstruction, 0.4, 4096);
-    const result = await withTimeout(
-      model.generateContent([prompt, { inlineData: { data: imageData, mimeType } }]),
-      TIMEOUT_MS,
-    );
-    return result.response.text();
+    if (!isGeminiReady()) {
+      throw new Error(
+        "Configuration Error: GEMINI_API_KEY not found in Replit Secrets.",
+      );
+    }
+    try {
+      const model = getGeminiGenerativeModel(systemInstruction, 0.4, 4096);
+      const result = await withTimeout(
+        model.generateContent([prompt, { inlineData: { data: imageData, mimeType } }]),
+        TIMEOUT_MS,
+      );
+      return result.response.text();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isAuthError(msg)) {
+        throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
+      }
+      if (isQuotaError(msg)) {
+        throw new Error("Gemini daily quota reached. Please try again later.");
+      }
+      throw err;
+    }
   }
 
   /**
    * Streaming chat with full provider fallback: Gemini → OpenRouter → Groq.
    * Calls onChunk for each text fragment. Throws on total failure.
+   * FIX: The stream iteration (for-await loop) is now wrapped in a hard 30s
+   * timeout so a mid-stream hang cannot freeze the server indefinitely.
    */
   async streamChat(
     systemInstruction: string,
@@ -142,15 +181,26 @@ class AIProviderManager {
           console.log(`[AIProvider] Gemini attempt ${attempt + 1}`);
           const model = getGeminiGenerativeModel(systemInstruction);
           const chat = model.startChat({ history });
+
+          // Timeout on sendMessageStream (initial connection)
           const streamResult = await withTimeout(
             chat.sendMessageStream(userMessage),
             TIMEOUT_MS,
           );
+
+          // FIX: Wrap the entire stream-consumption loop in a hard timeout so
+          // a mid-stream hang cannot block the server indefinitely.
           let chunkCount = 0;
-          for await (const chunk of streamResult.stream) {
-            const text = chunk.text();
-            if (text) { onChunk(text); chunkCount++; }
-          }
+          await withTimeout(
+            (async () => {
+              for await (const chunk of streamResult.stream) {
+                const text = chunk.text();
+                if (text) { onChunk(text); chunkCount++; }
+              }
+            })(),
+            TIMEOUT_MS,
+          );
+
           console.log(`[AIProvider] Gemini OK — ${chunkCount} chunks`);
           if (this.state["gemini"]) this.state["gemini"].quotaStatus = "ok";
           return { provider: "gemini" };
@@ -159,6 +209,10 @@ class AIProviderManager {
           const msg = err instanceof Error ? err.message : "Gemini error";
           console.error(`[AIProvider] Gemini attempt ${attempt} failed:`, msg.slice(0, 200));
 
+          if (isAuthError(msg)) {
+            // Auth errors are permanent — don't retry, don't fall back silently
+            throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
+          }
           if (isQuotaError(msg)) {
             this.markFailed("gemini", 60 * 60_000, true);
             console.warn("[AIProvider] Gemini quota exhausted — falling back");
@@ -224,7 +278,7 @@ class AIProviderManager {
     const noKeys = !geminiKeyLoaded && !openrouterKeyLoaded && !groqKeyLoaded;
     throw new Error(
       noKeys
-        ? "No AI provider API keys are configured. Please set GEMINI_API_KEY in project secrets."
+        ? "Configuration Error: GEMINI_API_KEY not found in Replit Secrets."
         : this.state["gemini"]?.quotaStatus === "exhausted"
           ? "Gemini daily quota reached. Please try again later."
           : "Primary AI temporarily unavailable. Please try again in a moment.",
@@ -233,12 +287,15 @@ class AIProviderManager {
 
   /** Returns structured status object for /raksh/status endpoint. */
   getStatus() {
+    const uptimeSeconds = Math.floor((Date.now() - SERVER_START) / 1000);
     return {
       provider: "gemini",
       model: GEMINI_MODEL,
+      version: VERSION,
       healthy: isGeminiReady() && this.isCooledDown("gemini"),
       initialized: isGeminiReady(),
       keyLoaded: geminiKeyLoaded,
+      uptime: uptimeSeconds,
       lastHealthCheck: this.lastHealthCheck,
       lastInitialization: this.initializedAt,
       quotaStatus: this.state["gemini"]?.quotaStatus ?? "unknown",
@@ -274,14 +331,15 @@ export function getAIProvider(): AIProviderManager {
 export function logStartupStatus(): void {
   console.log("✓ Environment loaded");
   if (geminiKeyLoaded) {
-    console.log("✓ Gemini key detected");
+    console.log("✓ GEMINI_API_KEY detected");
     console.log("✓ Gemini initialized");
-    console.log(`✓ Model ready — ${GEMINI_MODEL}`);
+    console.log(`✓ Model loaded — ${GEMINI_MODEL}`);
   } else {
     console.warn("✗ GEMINI_API_KEY not set — Gemini unavailable");
+    console.warn("  Add GEMINI_API_KEY once in Replit Secrets to enable AI features.");
   }
   if (openrouterKeyLoaded) console.log("✓ OpenRouter key detected");
   if (groqKeyLoaded)       console.log("✓ Groq key detected");
-  console.log("✓ AI Provider Manager ready");
-  console.log("✓ Raksh AI ready");
+  console.log("✓ AI Provider Ready");
+  console.log("✓ Raksh AI Ready");
 }
