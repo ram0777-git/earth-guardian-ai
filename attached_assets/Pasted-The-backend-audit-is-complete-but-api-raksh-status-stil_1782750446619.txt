@@ -1,0 +1,112 @@
+The backend audit is complete, but `/api/raksh/status` still reports:
+
+* keyLoaded: false
+* healthy: false
+
+even after adding `GEMINI_API_KEY` to Replit Secrets.
+
+Do NOT assume the API key is missing.
+
+Instead, perform a complete root-cause diagnosis and permanently fix the environment loading.
+
+Requirements:
+
+1. Verify that `process.env.GEMINI_API_KEY` is actually available at runtime.
+
+2. Trace the environment variable from:
+
+   * Replit Secrets
+   * Node.js runtime
+   * Server startup
+   * AI Provider Manager
+   * Gemini singleton
+   * Chat endpoint
+   * Image generation
+   * Vision
+   * Document analysis
+
+3. If the variable exists but is not being detected:
+
+   * find exactly where it is lost
+   * fix the code
+   * remove duplicate environment loading
+   * remove duplicate initialization
+   * do NOT require code changes after future deployments
+
+4. If a server restart is required after adding Secrets:
+
+   * detect it
+   * display a clear message
+   * never silently fail
+
+5. Verify that startup logs show:
+
+✓ Environment loaded
+
+✓ GEMINI_API_KEY detected
+
+✓ Gemini initialized
+
+✓ Model loaded
+
+✓ AI Provider Ready
+
+✓ Raksh AI Ready
+
+6. Verify that every endpoint uses the SAME singleton Gemini client:
+
+* Chat
+* Image Generation
+* Vision
+* Document Analysis
+* Voice
+* Reports
+
+7. Add diagnostic logging (without exposing the API key):
+
+* Environment loaded
+* Key present: true/false
+* Key length
+* Provider initialized
+* Singleton reused
+* Request received
+* Request completed
+* Initialization timestamp
+
+Never print the API key itself.
+
+8. If `/api/raksh/status` reports `keyLoaded: false`, automatically determine WHY instead of returning a generic error.
+
+9. Verify the following scenarios:
+
+* Fresh Replit import
+* New Replit account
+* Server restart
+* Deployment
+* Git clone
+* New conversation
+* Browser refresh
+
+The application should require only ONE manual step:
+
+Add `GEMINI_API_KEY` once in Replit Secrets.
+
+No code changes should ever be required afterward.
+
+10. If the problem is not the API key, identify the actual root cause (startup order, environment scope, singleton creation, build process, module import timing, etc.) and fix it.
+
+Return only:
+
+* Root cause
+* Files modified
+* Fixes applied
+* Verification results
+* Remaining issues (if any)
+
+Do not stop until `/api/raksh/status` reports:
+
+* keyLoaded: true
+* initialized: true
+* healthy: true
+
+and Chat, Image Generation, Vision, Document Analysis, Voice, and Reports are all working correctly.

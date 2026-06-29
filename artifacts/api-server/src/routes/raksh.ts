@@ -412,6 +412,11 @@ router.get("/raksh/status", (_req, res) => {
   res.json(getAIProvider().getStatus());
 });
 
+// ── Route: Full diagnostic dump (no secrets exposed) ──────────────────────────
+router.get("/raksh/diagnose", (_req, res) => {
+  res.json(getAIProvider().getDiagnostics());
+});
+
 // ── Route: Image analysis via Gemini Vision ────────────────────────────────────
 router.post("/raksh/analyze-image", async (req, res) => {
   const { imageData, mimeType, userPrompt } = req.body as {
