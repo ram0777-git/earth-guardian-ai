@@ -2,15 +2,18 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AreaChart, Area, BarChart, Bar, Cell, LineChart, Line,
+  PieChart, Pie, Tooltip as RechartTooltip, Legend,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { chartData } from "@/data/sampleData";
 import { responseTimeData, disasterTypeBreakdown } from "@/data/dashboardData";
-import { BarChart2, TrendingUp, Clock } from "lucide-react";
+import { BarChart2, TrendingUp, Clock, Database } from "lucide-react";
+import { useLiveStats } from "@/hooks/useLiveIntelligence";
 
 const TABS = [
   { id: "trends",   label: "12-Month Trends", icon: TrendingUp },
   { id: "types",    label: "Disaster Types",   icon: BarChart2  },
+  { id: "live",     label: "Live Sources",     icon: Database   },
   { id: "response", label: "Response Times",   icon: Clock      },
 ];
 
@@ -40,8 +43,94 @@ function ChartSkeleton() {
   );
 }
 
+function LiveSourcesChart() {
+  const { data, isLoading, isError } = useLiveStats();
+
+  if (isLoading) return <ChartSkeleton />;
+
+  if (isError || !data) {
+    return (
+      <div className="flex h-[260px] items-center justify-center text-slate-500 text-sm">
+        Live data unavailable — check API server
+      </div>
+    );
+  }
+
+  const { stats, sources } = data;
+
+  const sourceData = [
+    { name: "USGS Earthquakes",  value: stats.earthquakesToday,    color: "#ef4444", source: "usgs",  ok: sources.usgs  },
+    { name: "GDACS Events",      value: stats.floods + stats.cyclones + stats.wildfires + stats.volcanoes + stats.droughts, color: "#f97316", source: "gdacs", ok: sources.gdacs },
+    { name: "NASA EONET",        value: stats.totalActiveEvents - stats.earthquakesToday, color: "#818cf8", source: "eonet", ok: sources.eonet },
+    { name: "NOAA Alerts",       value: stats.noaaAlerts,          color: "#22d3ee", source: "noaa",  ok: sources.noaa  },
+  ].filter(d => d.value > 0);
+
+  const typeData = [
+    { type: "Earthquakes", count: stats.earthquakesToday,  color: "#ef4444" },
+    { type: "Floods",      count: stats.floods,            color: "#22d3ee" },
+    { type: "Wildfires",   count: stats.wildfires,         color: "#fb923c" },
+    { type: "Cyclones",    count: stats.cyclones,          color: "#22c55e" },
+    { type: "Volcanoes",   count: stats.volcanoes,         color: "#a855f7" },
+    { type: "Storms",      count: stats.storms,            color: "#eab308" },
+    { type: "Droughts",    count: stats.droughts,          color: "#f59e0b" },
+  ].filter(d => d.count > 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Source status pills */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { label: "USGS", ok: sources.usgs, count: stats.earthquakesToday, color: "#ef4444" },
+          { label: "GDACS", ok: sources.gdacs, count: stats.totalActiveEvents - stats.earthquakesToday, color: "#f97316" },
+          { label: "NASA EONET", ok: sources.eonet, count: undefined, color: "#818cf8" },
+          { label: "NOAA", ok: sources.noaa, count: stats.noaaAlerts, color: "#22d3ee" },
+        ].map(s => (
+          <div
+            key={s.label}
+            className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold"
+            style={{
+              borderColor: s.ok ? `${s.color}40` : "rgba(239,68,68,0.3)",
+              backgroundColor: s.ok ? `${s.color}10` : "rgba(239,68,68,0.08)",
+              color: s.ok ? s.color : "#ef4444",
+            }}
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${s.ok ? "animate-ping" : ""}`}
+                style={{ backgroundColor: s.ok ? s.color : "#ef4444" }} />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: s.ok ? s.color : "#ef4444" }} />
+            </span>
+            {s.label}
+            {s.count !== undefined && <span className="font-bold">({s.count})</span>}
+            {!s.ok && <span className="text-red-400">offline</span>}
+          </div>
+        ))}
+      </div>
+
+      {/* Live type breakdown bar chart */}
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={typeData} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+          <CartesianGrid {...GRID} horizontal vertical={false} />
+          <XAxis dataKey="type" tick={AXIS} axisLine={false} tickLine={false} />
+          <YAxis tick={AXIS} axisLine={false} tickLine={false} width={28} />
+          <Tooltip {...TT} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+          <Bar dataKey="count" name="Events" radius={[5, 5, 0, 0]}>
+            {typeData.map((entry, i) => (
+              <Cell key={i} fill={entry.color} fillOpacity={0.9} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      <p className="text-center text-[10px] text-slate-600">
+        Live data from USGS · GDACS · NASA EONET · NOAA · auto-refresh every 30s
+      </p>
+    </div>
+  );
+}
+
 export function InteractiveCharts({ loading }: { loading: boolean }) {
-  const [activeTab, setActiveTab] = useState("trends");
+  const [activeTab, setActiveTab] = useState("live");
 
   return (
     <div
@@ -67,6 +156,12 @@ export function InteractiveCharts({ loading }: { loading: boolean }) {
               >
                 <Icon className="h-3 w-3" />
                 <span className="hidden sm:inline">{tab.label}</span>
+                {tab.id === "live" && (
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -87,6 +182,8 @@ export function InteractiveCharts({ loading }: { loading: boolean }) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             >
+              {activeTab === "live" && <LiveSourcesChart />}
+
               {activeTab === "trends" && (
                 <>
                   <div className="mb-3 flex flex-wrap gap-4 text-xs">
@@ -135,7 +232,7 @@ export function InteractiveCharts({ loading }: { loading: boolean }) {
                       <YAxis tick={AXIS} axisLine={false} tickLine={false} width={28} />
                       <Tooltip {...TT} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                       <Bar dataKey="count" name="Events" radius={[5, 5, 0, 0]}>
-                        {disasterTypeBreakdown.map((entry, i) => (
+                        {disasterTypeBreakdown.map((entry: any, i: number) => (
                           <Cell key={i} fill={entry.color} fillOpacity={0.9} />
                         ))}
                       </Bar>

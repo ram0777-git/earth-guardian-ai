@@ -1,6 +1,6 @@
 export interface DisasterEvent {
   id: string;
-  type: "earthquake" | "flood" | "wildfire" | "hurricane" | "tsunami" | "volcano" | "landslide";
+  type: "earthquake" | "flood" | "wildfire" | "hurricane" | "tsunami" | "volcano" | "landslide" | "cyclone" | "storm" | "drought" | "other";
   title: string;
   location: string;
   country: string;
@@ -12,8 +12,9 @@ export interface DisasterEvent {
   time: string;
   affected?: string;
   status: string;
-  source: "usgs" | "sample";
+  source: "usgs" | "sample" | "gdacs" | "eonet";
   description?: string;
+  url?: string;
 }
 
 export const sampleMapDisasters: DisasterEvent[] = [
@@ -222,11 +223,15 @@ export const DISASTER_TYPE_CONFIG: Record<string, {
   color: string;
   bg: string;
 }> = {
-  earthquake: { label: "Earthquakes",  emoji: "⚡", color: "#818cf8", bg: "rgba(129,140,248,0.12)" },
+  earthquake: { label: "Earthquakes",  emoji: "⚡", color: "#ef4444", bg: "rgba(239,68,68,0.12)"   },
   flood:      { label: "Floods",       emoji: "💧", color: "#22d3ee", bg: "rgba(34,211,238,0.12)"  },
   wildfire:   { label: "Wildfires",    emoji: "🔥", color: "#fb923c", bg: "rgba(251,146,60,0.12)"  },
   hurricane:  { label: "Hurricanes",   emoji: "🌀", color: "#60a5fa", bg: "rgba(96,165,250,0.12)"  },
+  cyclone:    { label: "Cyclones",     emoji: "🌀", color: "#22c55e", bg: "rgba(34,197,94,0.12)"   },
+  storm:      { label: "Storms",       emoji: "⛈️", color: "#eab308", bg: "rgba(234,179,8,0.12)"   },
   tsunami:    { label: "Tsunamis",     emoji: "🌊", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
-  volcano:    { label: "Volcanoes",    emoji: "🌋", color: "#f87171", bg: "rgba(248,113,113,0.12)" },
+  volcano:    { label: "Volcanoes",    emoji: "🌋", color: "#a855f7", bg: "rgba(168,85,247,0.12)"  },
   landslide:  { label: "Landslides",   emoji: "⛰️", color: "#facc15", bg: "rgba(250,204,21,0.12)"  },
+  drought:    { label: "Droughts",     emoji: "☀️", color: "#f59e0b", bg: "rgba(245,158,11,0.12)"  },
+  other:      { label: "Other",        emoji: "⚠️", color: "#64748b", bg: "rgba(100,116,139,0.12)" },
 };

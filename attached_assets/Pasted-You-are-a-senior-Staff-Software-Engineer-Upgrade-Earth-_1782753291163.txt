@@ -1,0 +1,160 @@
+You are a senior Staff Software Engineer. Upgrade Earth Guardian AI into a production-grade Global Disaster Intelligence Platform.
+
+IMPORTANT RULES
+
+- Do NOT break any existing functionality.
+- Preserve all current AI features (Gemini/OpenRouter/Groq failover, chat, image generation, document analysis, simulation, reports, voice, uploads).
+- Reuse the existing architecture and components.
+- Do not duplicate code.
+- Build production-quality, modular, reusable components.
+- No placeholders or fake data.
+- Use only real live APIs.
+
+==================================================
+PHASE 1 — LIVE DISASTER COMMAND DASHBOARD
+==================================================
+
+Create a new Dashboard page showing real-time global disaster intelligence.
+
+Include responsive statistic cards:
+
+• Active Global Events
+• Earthquakes Today
+• Floods
+• Cyclones
+• Wildfires
+• Volcanoes
+• Storms
+• Countries Affected
+• High Risk Regions
+
+Each card must display:
+- live count
+- icon
+- last updated time
+- loading state
+- error state
+
+Refresh automatically every 30 seconds.
+
+==================================================
+PHASE 2 — INTERACTIVE LIVE MAP
+==================================================
+
+Upgrade the Live Map page.
+
+Use Leaflet + OpenStreetMap.
+
+Display live disaster markers from:
+
+- NASA EONET
+- USGS Earthquakes
+- NOAA weather alerts (if available)
+
+Different marker colors:
+
+Red = Earthquake
+Blue = Flood
+Orange = Wildfire
+Purple = Volcano
+Yellow = Storm
+Green = Cyclone
+
+Each marker popup must show:
+
+• Disaster Type
+• Location
+• Severity
+• Time
+• Coordinates
+• Source
+• Link to details
+
+Support:
+
+- zoom
+- pan
+- clustering
+- fullscreen
+- search
+- legend
+- layer toggle
+- filter by disaster type
+- filter by date
+
+==================================================
+PHASE 3 — ANALYTICS
+==================================================
+
+Add professional charts:
+
+• Disaster frequency
+• Disaster type distribution
+• Country comparison
+• Timeline
+• Risk trend
+
+Use responsive charts.
+
+==================================================
+PHASE 4 — AI INSIGHTS PANEL
+==================================================
+
+Create an AI Insights widget.
+
+Every refresh generate:
+
+• Highest Risk Area
+• Most Active Disaster
+• Predicted Escalation
+• AI Summary
+• Recommended Preparedness
+
+Reuse the existing Raksh AI backend.
+
+==================================================
+PHASE 5 — PERFORMANCE
+==================================================
+
+Optimize everything.
+
+- Lazy loading
+- Memoization
+- Cache API responses
+- Request deduplication
+- Retry only transient failures
+- Skeleton loading
+- Responsive UI
+- Dark mode compatible
+
+==================================================
+PHASE 6 — CODE QUALITY
+==================================================
+
+Do NOT modify working AI provider logic.
+
+Keep:
+
+✓ Multi-provider fallback
+✓ Streaming
+✓ Image generation
+✓ Document analysis
+✓ Voice
+✓ Reports
+✓ Simulation
+
+No duplicated code.
+
+==================================================
+DELIVERABLES
+
+Return:
+
+1. Files created
+2. Files modified
+3. APIs integrated
+4. Performance optimizations
+5. Verification steps
+6. Final architecture summary
+
+The application must look like a professional emergency command center suitable for a national disaster management agency and impress hackathon judges.

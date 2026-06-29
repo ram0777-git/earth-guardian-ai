@@ -1,16 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, Wifi, Clock } from "lucide-react";
-import { OverviewCards } from "@/components/dashboard/OverviewCards";
+import { OverviewCards }    from "@/components/dashboard/OverviewCards";
 import { InteractiveCharts } from "@/components/dashboard/InteractiveCharts";
-import { AIInsightsPanel } from "@/components/dashboard/AIInsightsPanel";
-import { RiskScoreCard } from "@/components/dashboard/RiskScoreCard";
-import { RecentAlerts } from "@/components/dashboard/RecentAlerts";
-import { WeatherCard } from "@/components/dashboard/WeatherCard";
-import { AIPredictionCard } from "@/components/dashboard/AIPredictionCard";
-import { QuickActions } from "@/components/dashboard/QuickActions";
-import { ActiveDisasters } from "@/components/dashboard/ActiveDisasters";
-import { DisasterTimeline } from "@/components/dashboard/DisasterTimeline";
+import { AIInsightsPanel }   from "@/components/dashboard/AIInsightsPanel";
+import { RiskScoreCard }     from "@/components/dashboard/RiskScoreCard";
+import { RecentAlerts }      from "@/components/dashboard/RecentAlerts";
+import { WeatherCard }       from "@/components/dashboard/WeatherCard";
+import { AIPredictionCard }  from "@/components/dashboard/AIPredictionCard";
+import { QuickActions }      from "@/components/dashboard/QuickActions";
+import { ActiveDisasters }   from "@/components/dashboard/ActiveDisasters";
+import { DisasterTimeline }  from "@/components/dashboard/DisasterTimeline";
+import { LiveKpiGrid }       from "@/components/dashboard/LiveKpiGrid";
+import { useQueryClient }    from "@tanstack/react-query";
 
 function useClock() {
   const [time, setTime] = useState(() => new Date());
@@ -27,24 +29,28 @@ const staggerContainer = {
 };
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
-  show:   { opacity: 1, y: 0,  transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const } },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const } },
 };
 
 export default function DashboardPage() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
   const [spinning, setSpinning] = useState(false);
-  const now = useClock();
+  const now       = useClock();
+  const qc        = useQueryClient();
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 1100);
     return () => clearTimeout(t);
   }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setSpinning(true);
     setLoading(true);
+    qc.invalidateQueries({ queryKey: ["live-stats"] });
+    qc.invalidateQueries({ queryKey: ["live-events"] });
+    qc.invalidateQueries({ queryKey: ["ai-insights"] });
     setTimeout(() => { setLoading(false); setSpinning(false); }, 1000);
-  };
+  }, [qc]);
 
   return (
     <div className="relative min-h-screen bg-[#06121F] pb-20 pt-24">
@@ -85,7 +91,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Real-time disaster intelligence · Global coverage
+              Real-time disaster intelligence · Global coverage · Auto-refresh every 30s
             </p>
           </div>
 
@@ -104,13 +110,19 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/10 hover:border-white/20"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${spinning ? "animate-spin" : ""}`} />
-              Refresh
+              Refresh All
             </motion.button>
           </div>
         </motion.div>
 
-        {/* ── KPI Overview cards ───────────────────────── */}
         <motion.div variants={staggerContainer} initial="hidden" animate="show">
+
+          {/* ── Row 0: Live disaster type KPI grid ───── */}
+          <motion.div variants={fadeUp} className="mb-6">
+            <LiveKpiGrid />
+          </motion.div>
+
+          {/* ── Row 1: Platform KPI cards ────────────── */}
           <motion.div variants={fadeUp}>
             <OverviewCards loading={loading} />
           </motion.div>
@@ -151,6 +163,7 @@ export default function DashboardPage() {
           <motion.div variants={fadeUp} className="mt-6">
             <DisasterTimeline loading={loading} />
           </motion.div>
+
         </motion.div>
       </div>
     </div>

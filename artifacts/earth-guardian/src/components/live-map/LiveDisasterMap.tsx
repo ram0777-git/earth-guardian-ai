@@ -14,6 +14,7 @@ import { useGetDisasters } from "@workspace/api-client-react";
 import { DISASTER_TYPE_CONFIG, type DisasterEvent } from "@/data/mapData";
 import { SearchBar, type NominatimResult } from "./SearchBar";
 import { LocationPanel } from "./LocationPanel";
+import { useLiveEvents } from "@/hooks/useLiveIntelligence";
 
 /* ── Tile layers ─────────────────────────────────────────── */
 
@@ -60,13 +61,17 @@ const SEV_COLOR: Record<string, string> = {
 };
 
 const TYPE_COLOR: Record<string, string> = {
-  earthquake: "#818cf8",
-  flood:      "#22d3ee",
-  wildfire:   "#fb923c",
-  hurricane:  "#60a5fa",
-  tsunami:    "#a78bfa",
-  volcano:    "#f87171",
-  landslide:  "#facc15",
+  earthquake: "#ef4444",  // Red
+  flood:      "#22d3ee",  // Blue
+  wildfire:   "#fb923c",  // Orange
+  hurricane:  "#60a5fa",  // Blue
+  cyclone:    "#22c55e",  // Green
+  storm:      "#eab308",  // Yellow
+  tsunami:    "#a78bfa",  // Purple-ish
+  volcano:    "#a855f7",  // Purple
+  landslide:  "#facc15",  // Yellow
+  drought:    "#f59e0b",  // Amber
+  other:      "#64748b",  // Slate
 };
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -412,28 +417,56 @@ export function LiveDisasterMap() {
 
   /* Data */
   const { data: apiDisasters = [] } = useGetDisasters();
+  const { data: liveEventsData }    = useLiveEvents();
+
+  const liveMapEvents = useMemo((): DisasterEvent[] => {
+    if (!liveEventsData?.events) return [];
+    return liveEventsData.events
+      .filter(e => e.lat != null && e.lng != null && Math.abs(e.lat) <= 90 && Math.abs(e.lng) <= 180)
+      .map(e => ({
+        id:          e.id,
+        type:        (e.type as DisasterEvent["type"]) ?? "other",
+        title:       e.name,
+        location:    e.country ? `${e.country}` : `${e.lat.toFixed(2)}, ${e.lng.toFixed(2)}`,
+        country:     e.country || e.source,
+        lat:         e.lat,
+        lng:         e.lng,
+        severity:    e.severity,
+        time:        e.time ? new Date(e.time).toLocaleString() : "N/A",
+        status:      "Active",
+        source:      (e.source === "USGS" ? "usgs" : e.source === "GDACS" ? "gdacs" : "eonet") as DisasterEvent["source"],
+        description: e.detail ? `${e.source} — ${e.detail}` : e.source,
+        url:         e.url,
+      }));
+  }, [liveEventsData]);
 
   const allEvents = useMemo(
-    () => [
-      ...earthquakes,
-      ...apiDisasters.map((d: any): DisasterEvent => ({
-        id:          d.id,
-        type:        d.type as DisasterEvent["type"],
-        title:       d.name,
-        location:    `${d.lat.toFixed(2)}, ${d.lng.toFixed(2)}`,
-        country:     "Global",
-        lat:         d.lat,
-        lng:         d.lng,
-        severity:    d.severity,
-        magnitude:   undefined,
-        depth:       undefined,
-        time:        d.timestamp ? new Date(d.timestamp).toLocaleString() : "N/A",
-        status:      "Active",
-        source:      "sample" as const,
-        description: d.description,
-      })),
-    ],
-    [earthquakes, apiDisasters]
+    () => {
+      const seen = new Set<string>();
+      const merged: DisasterEvent[] = [];
+      // USGS earthquakes from direct fetch (most authoritative for earthquakes)
+      for (const e of earthquakes) { seen.add(e.id); merged.push(e); }
+      // Live events from backend (GDACS + EONET + USGS-deduped)
+      for (const e of liveMapEvents) {
+        if (!seen.has(e.id)) { seen.add(e.id); merged.push(e); }
+      }
+      // API disasters from orval client
+      for (const d of apiDisasters as any[]) {
+        const id = String(d.id);
+        if (!seen.has(id)) {
+          seen.add(id);
+          merged.push({
+            id, type: d.type as DisasterEvent["type"],
+            title: d.name, location: `${d.lat?.toFixed(2)}, ${d.lng?.toFixed(2)}`,
+            country: "Global", lat: d.lat, lng: d.lng, severity: d.severity,
+            time: d.timestamp ? new Date(d.timestamp).toLocaleString() : "N/A",
+            status: "Active", source: "sample" as const, description: d.description,
+          });
+        }
+      }
+      return merged;
+    },
+    [earthquakes, liveMapEvents, apiDisasters]
   );
 
   const filteredEvents = useMemo(() => {

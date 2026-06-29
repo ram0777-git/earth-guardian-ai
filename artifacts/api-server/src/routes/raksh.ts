@@ -803,4 +803,210 @@ Be specific and data-driven. Use actual event names, magnitudes, and locations f
   }
 });
 
+// ── Route: live-stats (aggregated counts) ─────────────────────────────────────
+router.get("/raksh/live-stats", async (_req, res) => {
+  try {
+    const data = await fetchLiveIntelligence();
+
+    const gdacsMap: Record<string, number> = { EQ: 0, TC: 0, FL: 0, VO: 0, WF: 0, DR: 0, ST: 0 };
+    data.gdacs.items.forEach(e => {
+      if (e.type in gdacsMap) gdacsMap[e.type]++;
+    });
+
+    const eonetMap: Record<string, number> = {};
+    data.eonet.items.forEach(e => {
+      const k = e.type.toLowerCase();
+      eonetMap[k] = (eonetMap[k] ?? 0) + 1;
+    });
+
+    const countries = new Set<string>();
+    data.gdacs.items.forEach(e => {
+      if (e.country) countries.add(e.country);
+      e.affectedCountries?.forEach(c => countries.add(c));
+    });
+
+    const redAlerts = data.gdacs.items.filter(e => e.alertLevel === "Red").length;
+    const totalEvents =
+      data.earthquakes.all_24h.length + data.gdacs.items.length + data.eonet.items.length;
+
+    res.json({
+      fetchedAt: data.fetchedAt,
+      stats: {
+        totalActiveEvents: totalEvents,
+        earthquakesToday:  data.earthquakes.all_24h.length,
+        significantEarthquakes: data.earthquakes.significant_week.length,
+        floods:   gdacsMap.FL + (eonetMap["floods"] ?? 0),
+        cyclones: gdacsMap.TC + (eonetMap["tropical cyclones"] ?? 0) + (eonetMap["cyclones"] ?? 0),
+        wildfires: gdacsMap.WF + (eonetMap["wildfires"] ?? 0),
+        volcanoes: gdacsMap.VO + (eonetMap["volcanoes"] ?? 0),
+        storms:   gdacsMap.ST + (eonetMap["severe storms"] ?? 0) + data.weatherAlerts.items.length,
+        droughts: gdacsMap.DR,
+        countriesAffected: countries.size,
+        redAlerts,
+        orangeAlerts: data.gdacs.items.filter(e => e.alertLevel === "Orange").length,
+        noaaAlerts: data.weatherAlerts.items.length,
+        highRiskRegions: redAlerts,
+      },
+      sources: {
+        usgs:  data.earthquakes.ok,
+        gdacs: data.gdacs.ok,
+        eonet: data.eonet.ok,
+        noaa:  data.weatherAlerts.ok,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "live-stats failed" });
+  }
+});
+
+// ── Route: live-events (map data) ─────────────────────────────────────────────
+router.get("/raksh/live-events", async (_req, res) => {
+  try {
+    const data = await fetchLiveIntelligence();
+
+    const gdacsTypeMap: Record<string, string> = {
+      EQ: "earthquake", TC: "cyclone", FL: "flood",
+      VO: "volcano",    WF: "wildfire", DR: "drought", ST: "storm",
+    };
+    const eonetTypeMap: Record<string, string> = {
+      "wildfires":        "wildfire",
+      "volcanoes":        "volcano",
+      "floods":           "flood",
+      "severe storms":    "storm",
+      "tropical cyclones":"cyclone",
+      "landslides":       "landslide",
+      "earthquakes":      "earthquake",
+    };
+
+    const events: object[] = [];
+
+    data.earthquakes.all_24h.forEach(eq => {
+      events.push({
+        id:       `usgs-${eq.id}`,
+        type:     "earthquake",
+        name:     eq.place,
+        lat:      eq.lat,
+        lng:      eq.lng,
+        severity: eq.magnitude >= 6.5 ? "critical" : eq.magnitude >= 5 ? "high" : eq.magnitude >= 3.5 ? "moderate" : "low",
+        time:     eq.time,
+        source:   "USGS",
+        detail:   `M${eq.magnitude}`,
+        country:  "",
+        url:      eq.url,
+      });
+    });
+
+    data.gdacs.items.forEach(ev => {
+      if (ev.lat == null || ev.lng == null) return;
+      events.push({
+        id:       `gdacs-${ev.id}`,
+        type:     gdacsTypeMap[ev.type] ?? "other",
+        name:     ev.name,
+        lat:      ev.lat,
+        lng:      ev.lng,
+        severity: ev.alertLevel === "Red" ? "critical" : ev.alertLevel === "Orange" ? "high" : "moderate",
+        time:     ev.fromDate,
+        source:   "GDACS",
+        detail:   ev.severity,
+        country:  ev.country,
+        url:      ev.url,
+      });
+    });
+
+    data.eonet.items.forEach(ev => {
+      if (ev.lat == null || ev.lng == null) return;
+      const typeLower = ev.type.toLowerCase();
+      events.push({
+        id:      `eonet-${ev.id}`,
+        type:    eonetTypeMap[typeLower] ?? "other",
+        name:    ev.title,
+        lat:     ev.lat,
+        lng:     ev.lng,
+        severity:"moderate",
+        time:    ev.latestDate,
+        source:  "NASA EONET",
+        detail:  ev.type,
+        country: "",
+        url:     `https://eonet.gsfc.nasa.gov/api/v3/events/${ev.id}`,
+      });
+    });
+
+    res.json({ fetchedAt: data.fetchedAt, events, total: events.length });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "live-events failed" });
+  }
+});
+
+// ── Route: ai-insights (5-min server-side cache) ──────────────────────────────
+let _aiInsightsCache: { data: object; expiresAt: number } | null = null;
+
+router.get("/raksh/ai-insights", async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (_aiInsightsCache && _aiInsightsCache.expiresAt > now) {
+      return res.json(_aiInsightsCache.data);
+    }
+
+    const data     = await fetchLiveIntelligence();
+    const provider = getAIProvider();
+
+    const topGdacs = data.gdacs.items.slice(0, 6).map(e => `${e.name} (${e.type}, ${e.alertLevel}, ${e.country})`).join("; ");
+    const topUsgs  = data.earthquakes.significant_week.slice(0, 4).map(e => `M${e.magnitude} ${e.place}`).join("; ");
+    const topEonet = data.eonet.items.slice(0, 5).map(e => `${e.title} (${e.type})`).join("; ");
+
+    const prompt = `You are a global disaster intelligence analyst. Analyze this live data and respond ONLY with valid JSON (no markdown, no code fences).
+
+Live summary:
+- USGS: ${data.earthquakes.all_24h.length} earthquakes in 24h (${data.earthquakes.significant_week.length} significant this week)
+- GDACS: ${data.gdacs.items.length} active events (${data.gdacs.items.filter(e => e.alertLevel === "Red").length} red alerts)
+- NASA EONET: ${data.eonet.items.length} natural events
+- NOAA: ${data.weatherAlerts.items.length} weather alerts
+
+Top GDACS events: ${topGdacs || "none"}
+Top USGS earthquakes: ${topUsgs || "none"}
+Top EONET events: ${topEonet || "none"}
+
+Respond with ONLY this JSON structure:
+{"highestRiskArea":"specific country or region","mostActiveDisaster":"type with count e.g. Earthquakes (47)","predictedEscalation":"specific threat likely to escalate in 48h","summary":"2-3 sentences using real event names and data","preparedness":"one actionable recommendation for emergency teams","riskLevel":"critical or high or moderate or low"}`;
+
+    let insights: Record<string, string>;
+    try {
+      const raw     = await provider.generate("You are a disaster intelligence AI. Return only valid JSON.", prompt);
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const jsonStart = cleaned.indexOf("{");
+      const jsonEnd   = cleaned.lastIndexOf("}");
+      insights = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+    } catch {
+      const redAlert = data.gdacs.items.find(e => e.alertLevel === "Red");
+      insights = {
+        highestRiskArea:      redAlert?.country ?? data.gdacs.items[0]?.country ?? "Multiple Regions",
+        mostActiveDisaster:   `Earthquakes (${data.earthquakes.all_24h.length} in 24h)`,
+        predictedEscalation:  redAlert?.name ?? `${data.earthquakes.significant_week[0]?.place ?? "Elevated seismic zone"} — potential aftershock sequence`,
+        summary:              `${data.earthquakes.all_24h.length} earthquakes recorded in last 24 hours with ${data.earthquakes.significant_week.length} significant events. ${data.gdacs.items.length} GDACS alerts active including ${data.gdacs.items.filter(e => e.alertLevel === "Red").length} red-level emergencies. ${data.weatherAlerts.items.length} NOAA weather warnings in effect.`,
+        preparedness:         "Pre-position emergency response teams near GDACS red-alert zones and ensure early-warning systems are active in seismically active regions.",
+        riskLevel:            data.gdacs.items.some(e => e.alertLevel === "Red") ? "high" : "moderate",
+      };
+    }
+
+    const response = {
+      ...insights,
+      fetchedAt:  data.fetchedAt,
+      generatedAt: new Date().toISOString(),
+      sources:    { usgs: data.earthquakes.ok, gdacs: data.gdacs.ok, eonet: data.eonet.ok, noaa: data.weatherAlerts.ok },
+      rawCounts: {
+        earthquakes24h: data.earthquakes.all_24h.length,
+        gdacEvents:     data.gdacs.items.length,
+        redAlerts:      data.gdacs.items.filter(e => e.alertLevel === "Red").length,
+        noaaAlerts:     data.weatherAlerts.items.length,
+      },
+    };
+
+    _aiInsightsCache = { data: response, expiresAt: now + 5 * 60 * 1000 };
+    return res.json(response);
+  } catch (err) {
+    return res.status(500).json({ error: err instanceof Error ? err.message : "AI insights failed" });
+  }
+});
+
 export default router;
+
