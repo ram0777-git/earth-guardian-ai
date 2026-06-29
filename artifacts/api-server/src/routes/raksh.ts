@@ -686,6 +686,11 @@ router.post("/raksh/chat", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
+  const geminiAvailable = !!getGeminiClient();
+  const openrouterAvailable = !!process.env["OPENROUTER_API_KEY"];
+  const groqAvailable = !!process.env["GROQ_API_KEY"];
+  console.log(`[Raksh] Chat request — msg: "${lastMessage.content.slice(0, 60)}" | providers: gemini=${geminiAvailable} openrouter=${openrouterAvailable} groq=${groqAvailable}`);
+
   // ── Try Gemini first ──────────────────────────────────────────────────────
   const gemini = getGeminiClient();
   if (gemini && isProviderCooledDown("gemini")) {
@@ -693,6 +698,7 @@ router.post("/raksh/chat", async (req, res) => {
     let geminiSucceeded = false;
     while (attempt <= MAX_RETRIES) {
       try {
+        console.log(`[Raksh] Gemini attempt ${attempt + 1} starting`);
         const history = toGeminiHistory(messages);
         const model = getGeminiModel(gemini, systemInstruction);
         const chat = model.startChat({ history });
@@ -701,12 +707,15 @@ router.post("/raksh/chat", async (req, res) => {
           TIMEOUT_MS,
         );
 
+        let chunkCount = 0;
         for await (const chunk of streamResult.stream) {
           const text = chunk.text();
           if (text) {
             res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+            chunkCount++;
           }
         }
+        console.log(`[Raksh] Gemini stream complete — ${chunkCount} chunks sent`);
         res.write("data: [DONE]\n\n");
         res.end();
         geminiSucceeded = true;
@@ -717,7 +726,6 @@ router.post("/raksh/chat", async (req, res) => {
         console.error(`[Raksh] Gemini attempt ${attempt} error:`, message.slice(0, 200));
 
         if (isQuotaExhaustedError(message)) {
-          // Daily quota hit — cool down for 1 hour, no point retrying
           markProviderFailed("gemini", 60 * 60_000);
           console.warn("[Raksh] Gemini daily quota exhausted — switching to fallback providers.");
           break;
@@ -733,20 +741,24 @@ router.post("/raksh/chat", async (req, res) => {
       }
     }
     if (geminiSucceeded) return;
+  } else {
+    console.warn("[Raksh] Gemini skipped —", !gemini ? "GEMINI_API_KEY not set" : "provider in cooldown");
   }
 
   // ── Fallback: notify user then try OpenRouter / Groq ─────────────────────
-  const hasBackup = (isProviderCooledDown("openrouter") && !!process.env["OPENROUTER_API_KEY"]) ||
-                    (isProviderCooledDown("groq") && !!process.env["GROQ_API_KEY"]);
+  const hasBackup = (isProviderCooledDown("openrouter") && openrouterAvailable) ||
+                    (isProviderCooledDown("groq") && groqAvailable);
   if (hasBackup) {
     res.write(`data: ${JSON.stringify({ content: "Primary AI is temporarily unavailable. Switching to backup AI...\n\n" })}\n\n`);
   }
 
   // Try OpenRouter
-  if (isProviderCooledDown("openrouter") && process.env["OPENROUTER_API_KEY"]) {
+  if (isProviderCooledDown("openrouter") && openrouterAvailable) {
+    console.log("[Raksh] Trying OpenRouter fallback");
     try {
       const text = await callOpenRouter(systemInstruction, lastMessage.content);
       if (text) {
+        console.log("[Raksh] OpenRouter succeeded");
         res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
         res.write("data: [DONE]\n\n");
         res.end();
@@ -754,15 +766,18 @@ router.post("/raksh/chat", async (req, res) => {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      if (isRetryableError(msg)) markProviderFailed("openrouter");
+      console.error("[Raksh] OpenRouter error:", msg.slice(0, 200));
+      if (isTransientError(msg)) markProviderFailed("openrouter");
     }
   }
 
   // Try Groq
-  if (isProviderCooledDown("groq") && process.env["GROQ_API_KEY"]) {
+  if (isProviderCooledDown("groq") && groqAvailable) {
+    console.log("[Raksh] Trying Groq fallback");
     try {
       const text = await callGroq(systemInstruction, lastMessage.content);
       if (text) {
+        console.log("[Raksh] Groq succeeded");
         res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
         res.write("data: [DONE]\n\n");
         res.end();
@@ -770,12 +785,17 @@ router.post("/raksh/chat", async (req, res) => {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      if (isRetryableError(msg)) markProviderFailed("groq");
+      console.error("[Raksh] Groq error:", msg.slice(0, 200));
+      if (isTransientError(msg)) markProviderFailed("groq");
     }
   }
 
-  // All providers failed
-  res.write(`data: ${JSON.stringify({ error: "All AI providers are temporarily unavailable. Please try again in a moment." })}\n\n`);
+  // All providers failed — send structured error so frontend can display it
+  console.error("[Raksh] All providers failed. gemini=", geminiAvailable, "openrouter=", openrouterAvailable, "groq=", groqAvailable);
+  const noKeyMsg = !geminiAvailable && !openrouterAvailable && !groqAvailable
+    ? "No AI provider API keys are configured. Please set GEMINI_API_KEY in the project secrets."
+    : "All AI providers are temporarily unavailable. Please try again in a moment.";
+  res.write(`data: ${JSON.stringify({ error: noKeyMsg })}\n\n`);
   res.end();
 });
 

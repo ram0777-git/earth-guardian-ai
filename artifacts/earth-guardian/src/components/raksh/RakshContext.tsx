@@ -374,6 +374,9 @@ export function RakshProvider({ children }: { children: ReactNode }) {
         const decoder = new TextDecoder();
         let buffer = "";
         let accumulated = "";
+        let streamDone = false;
+
+        console.log("[Raksh] SSE stream started");
 
         while (true) {
           const { done, value } = await reader.read();
@@ -384,25 +387,38 @@ export function RakshProvider({ children }: { children: ReactNode }) {
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim();
-            if (raw === "[DONE]") break;
+            if (raw === "[DONE]") { streamDone = true; break; }
+
+            let parsed: { content?: string; error?: string };
             try {
-              const parsed = JSON.parse(raw) as { content?: string; error?: string };
-              if (parsed.error) throw new Error(parsed.error);
-              if (parsed.content) {
-                accumulated += parsed.content;
-                setConversations((prev) => {
-                  const next = prev.map((c) =>
-                    c.id === convId
-                      ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: accumulated } : m) }
-                      : c,
-                  );
-                  saveConversations(next);
-                  return next;
-                });
-              }
-            } catch { /* skip invalid json */ }
+              parsed = JSON.parse(raw) as { content?: string; error?: string };
+            } catch {
+              console.warn("[Raksh] SSE: skipping non-JSON chunk:", raw.slice(0, 80));
+              continue;
+            }
+
+            if (parsed.error) {
+              console.error("[Raksh] SSE: server error received:", parsed.error);
+              throw new Error(parsed.error);
+            }
+
+            if (parsed.content) {
+              accumulated += parsed.content;
+              setConversations((prev) => {
+                const next = prev.map((c) =>
+                  c.id === convId
+                    ? { ...c, messages: c.messages.map((m) => m.id === assistantMsgId ? { ...m, content: accumulated } : m) }
+                    : c,
+                );
+                saveConversations(next);
+                return next;
+              });
+            }
           }
+          if (streamDone) break;
         }
+
+        console.log("[Raksh] SSE stream complete, accumulated length:", accumulated.length);
 
         const { clean, commands } = parseCommands(accumulated);
         setConversations((prev) => {
