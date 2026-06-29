@@ -1,21 +1,33 @@
-// Read key ONCE at module load — never per request
-const API_KEY = process.env["GROQ_API_KEY"];
+// Lazy key resolution — read process.env on every call so secrets added
+// after module load are always picked up after a server restart.
+function getKey(): string | null {
+  return process.env["GROQ_API_KEY"] ?? null;
+}
 
-export const groqKeyLoaded = !!API_KEY;
+export function groqKeyLoaded(): boolean {
+  return !!getKey();
+}
+
+export function getGroqDiagnostics() {
+  const key = getKey();
+  return { envKeyPresent: !!key, envKeyLength: key?.length ?? 0 };
+}
 
 export async function callGroq(
   systemInstruction: string,
   userMessage: string,
   timeoutMs: number,
 ): Promise<string> {
-  if (!API_KEY) throw new Error("Groq not configured");
+  const key = getKey();
+  if (!key) throw new Error("Groq not configured — GROQ_API_KEY not set");
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${API_KEY}`,
+        "Authorization": `Bearer ${key}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -28,7 +40,7 @@ export async function callGroq(
       }),
       signal: controller.signal,
     });
-    if (!resp.ok) throw new Error(`Groq ${resp.status}`);
+    if (!resp.ok) throw new Error(`Groq ${resp.status}: ${resp.statusText}`);
     const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
     return data.choices?.[0]?.message?.content ?? "";
   } finally {
