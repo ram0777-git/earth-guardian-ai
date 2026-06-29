@@ -1,0 +1,219 @@
+You are acting as the lead backend architect for this project.
+
+Current problem:
+
+Raksh AI intermittently shows:
+
+"All AI providers are temporarily unavailable"
+
+even though the Gemini API key exists inside Replit Secrets.
+
+Do NOT add new UI.
+Do NOT add new features.
+Do NOT modify styling.
+
+Only fix the backend architecture.
+
+Tasks:
+
+1. Audit every AI provider implementation.
+
+2. Find every place where Gemini, OpenRouter or Groq clients are initialized.
+
+3. Remove duplicate initialization.
+
+4. Build one centralized AI Provider Manager.
+
+Architecture:
+
+server/
+   ai/
+      provider.ts
+      gemini.ts
+      openrouter.ts
+      groq.ts
+
+Only provider.ts should expose
+
+getAIProvider()
+
+All routes must use this singleton.
+
+Never recreate providers per request.
+
+----------------------------------
+
+Gemini
+
+• Load GEMINI_API_KEY only from process.env
+
+• Initialize once
+
+• Validate once during startup
+
+• Never recreate client
+
+----------------------------------
+
+Fallback Logic
+
+Priority:
+
+Gemini
+↓
+
+OpenRouter
+↓
+
+Groq
+
+Fallback ONLY when:
+
+401
+
+403
+
+429
+
+5xx
+
+Timeout
+
+Do NOT fallback for validation errors.
+
+----------------------------------
+
+Timeout
+
+Maximum request:
+
+30 seconds
+
+Abort hanging requests.
+
+Return proper JSON errors.
+
+Never leave frontend loading forever.
+
+----------------------------------
+
+Status Endpoint
+
+Improve
+
+/api/raksh/status
+
+Return
+
+{
+provider,
+model,
+healthy,
+initialized,
+keyLoaded,
+lastHealthCheck,
+lastInitialization,
+quotaStatus
+}
+
+----------------------------------
+
+Logging
+
+On startup print
+
+✓ Environment loaded
+
+✓ Gemini key detected
+
+✓ Gemini initialized
+
+✓ Model ready
+
+✓ AI Provider Manager ready
+
+✓ Raksh AI ready
+
+----------------------------------
+
+Error handling
+
+If Gemini quota exceeded
+
+Return
+
+{
+error:
+"Gemini daily quota reached. Please try later."
+}
+
+Do NOT crash.
+
+----------------------------------
+
+If provider unavailable
+
+Return
+
+{
+error:
+"Primary AI temporarily unavailable."
+}
+
+----------------------------------
+
+Retry
+
+Maximum
+
+1 retry
+
+Never infinite retries.
+
+----------------------------------
+
+Memory
+
+Reuse initialized provider.
+
+Never create clients inside request handlers.
+
+----------------------------------
+
+Verification
+
+After implementation verify
+
+✓ Server restart
+
+✓ Fresh deployment
+
+✓ New conversation
+
+✓ Existing conversation
+
+✓ Multiple simultaneous requests
+
+✓ Image generation
+
+✓ Vision
+
+✓ Document analysis
+
+✓ Voice
+
+✓ Status endpoint
+
+----------------------------------
+
+Deliver
+
+1 Root cause
+
+2 Files modified
+
+3 Permanent architecture
+
+4 Verification results
+
+5 Remaining risks

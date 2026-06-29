@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import {
   disasters,
   alerts,
@@ -14,70 +13,11 @@ import {
   buildLiveIntelligenceContext,
   fetchLiveIntelligence,
 } from "../services/liveIntelligence";
+import { getAIProvider, withTimeout } from "../ai/provider";
 
 const router = Router();
 
-// ── Config ─────────────────────────────────────────────────────────────────────
-// gemini-2.5-flash-lite: confirmed available and working with this API key
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const TIMEOUT_MS = 60_000;
-const MAX_RETRIES = 1;
-
-// ── AI Provider Manager ────────────────────────────────────────────────────────
-interface ProviderStatus {
-  name: string;
-  available: boolean;
-  failedAt?: number;
-  cooldownMs?: number;
-}
-
-const providerStatus: Record<string, ProviderStatus> = {
-  gemini:     { name: "Gemini", available: true },
-  openrouter: { name: "OpenRouter", available: true },
-  groq:       { name: "Groq", available: true },
-};
-
-function isProviderCooledDown(name: string): boolean {
-  const s = providerStatus[name];
-  if (!s) return false;
-  if (s.available) return true;
-  const cooldown = s.cooldownMs ?? 5 * 60_000;
-  if (s.failedAt && Date.now() - s.failedAt > cooldown) {
-    s.available = true;
-    s.failedAt = undefined;
-    s.cooldownMs = undefined;
-    return true;
-  }
-  return false;
-}
-
-function markProviderFailed(name: string, cooldownMs?: number) {
-  const s = providerStatus[name];
-  if (s) {
-    s.available = false;
-    s.failedAt = Date.now();
-    s.cooldownMs = cooldownMs;
-  }
-}
-
-/** Daily quota exhausted — no point retrying until tomorrow */
-function isQuotaExhaustedError(msg: string): boolean {
-  return /free.tier|GenerateRequestsPerDay|quota.*day|daily.*limit|per_day/i.test(msg);
-}
-
-/** Transient rate limit or server error — safe to retry after backoff */
-function isTransientError(msg: string): boolean {
-  return /500|503|overloaded|timeout|UNAVAILABLE/i.test(msg) ||
-    (/429/.test(msg) && !isQuotaExhaustedError(msg));
-}
-
-function getGeminiClient(): { genAI: GoogleGenerativeAI; model: string } | null {
-  const apiKey = process.env["GEMINI_API_KEY"];
-  if (!apiKey) return null;
-  return { genAI: new GoogleGenerativeAI(apiKey), model: process.env["GEMINI_MODEL"] ?? DEFAULT_MODEL };
-}
-
-// ── System prompt ─────────────────────────────────────────────────────────────
+// ── System prompt ──────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `You are Raksh AI, a premium real-time disaster intelligence and emergency response copilot embedded in Earth Guardian AI — a global disaster monitoring platform.
 
 EXPERTISE: Earthquakes, floods, cyclones, wildfires, landslides, heatwaves, storms, tsunamis, volcanoes, drought, emergency preparedness, climate awareness, and first aid.
@@ -165,7 +105,7 @@ Respond with:
 
 TONE: Professional, calm, authoritative. Always be honest about data limitations.`;
 
-// ── Intent types ──────────────────────────────────────────────────────────────
+// ── Intent types ───────────────────────────────────────────────────────────────
 type AppIntent =
   | "disasters" | "weather" | "risk" | "alerts" | "predictions"
   | "timeline" | "safety_check" | "brief" | "navigate" | "general";
@@ -182,7 +122,7 @@ interface IntentResult {
   extractedLocation: string | null;
 }
 
-// ── Temporal keyword detection ────────────────────────────────────────────────
+// ── Temporal keyword detection ─────────────────────────────────────────────────
 const TEMPORAL_PATTERNS = [
   /\b(today|tonight|this morning|this evening|right now|just now)\b/i,
   /\b(latest|recent|recently|current|currently|live|now|breaking)\b/i,
@@ -196,7 +136,7 @@ function isTemporalQuery(message: string): boolean {
   return TEMPORAL_PATTERNS.some(p => p.test(message));
 }
 
-// ── Location extraction ───────────────────────────────────────────────────────
+// ── Location extraction ────────────────────────────────────────────────────────
 const KNOWN_LOCATIONS: string[] = [
   "japan", "india", "china", "usa", "united states", "california", "texas",
   "indonesia", "philippines", "bangladesh", "pakistan", "nepal", "turkey",
@@ -207,7 +147,7 @@ const KNOWN_LOCATIONS: string[] = [
   "mumbai", "delhi", "tokyo", "beijing", "jakarta", "dhaka", "kathmandu",
   "pacific", "atlantic", "gulf", "caribbean", "himalaya", "ring of fire",
   "south asia", "southeast asia", "central america", "latin america",
-  "chennai", "chennai", "tokyo", "osaka", "kyoto", "manila", "hanoi",
+  "chennai", "osaka", "kyoto", "manila", "hanoi",
   "bangalore", "hyderabad", "kolkata", "ahmedabad", "surat", "pune",
 ];
 
@@ -226,7 +166,7 @@ function extractLocation(message: string): string | null {
   return null;
 }
 
-// ── Full intent detection ─────────────────────────────────────────────────────
+// ── Full intent detection ──────────────────────────────────────────────────────
 function detectIntent(message: string): IntentResult {
   const m = message.toLowerCase();
   const appIntents = new Set<AppIntent>();
@@ -315,7 +255,7 @@ ${timeline.map(t => `- [${t.status.toUpperCase()}] ${t.title} — ${t.descriptio
     : "";
 }
 
-// ── Build full system instruction ─────────────────────────────────────────────
+// ── Build full system instruction ──────────────────────────────────────────────
 interface AppContext {
   currentPage?: string;
   selectedLocation?: string;
@@ -367,7 +307,7 @@ async function buildSystemInstruction(
   return { instruction, usedLiveIntelligence };
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Convert message history to Gemini Content format ──────────────────────────
 function toGeminiHistory(messages: Array<{ role: "user" | "assistant"; content: string }>) {
   return messages.slice(0, -1).map(m => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -375,90 +315,7 @@ function toGeminiHistory(messages: Array<{ role: "user" | "assistant"; content: 
   }));
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Request timed out after ${ms / 1000}s`)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer!);
-  }
-}
-
-function getGeminiModel(
-  gemini: { genAI: GoogleGenerativeAI; model: string },
-  systemInstruction: string,
-) {
-  return gemini.genAI.getGenerativeModel({
-    model: gemini.model,
-    systemInstruction,
-    safetySettings: [
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-    ],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
-  });
-}
-
-// ── OpenRouter fallback ───────────────────────────────────────────────────────
-async function callOpenRouter(systemInstruction: string, userMessage: string): Promise<string> {
-  const apiKey = process.env["OPENROUTER_API_KEY"];
-  if (!apiKey) throw new Error("OpenRouter not configured");
-
-  const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://earthguardian.ai",
-      "X-Title": "Earth Guardian AI",
-    },
-    body: JSON.stringify({
-      model: "meta-llama/llama-3.3-70b-instruct:free",
-      messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 4096,
-    }),
-  }), TIMEOUT_MS);
-
-  if (!resp.ok) throw new Error(`OpenRouter ${resp.status}`);
-  const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? "";
-}
-
-// ── Groq fallback ─────────────────────────────────────────────────────────────
-async function callGroq(systemInstruction: string, userMessage: string): Promise<string> {
-  const apiKey = process.env["GROQ_API_KEY"];
-  if (!apiKey) throw new Error("Groq not configured");
-
-  const resp = await withTimeout(fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 4096,
-    }),
-  }), TIMEOUT_MS);
-
-  if (!resp.ok) throw new Error(`Groq ${resp.status}`);
-  const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? "";
-}
-
-// ── Route: live intelligence status ──────────────────────────────────────────
+// ── Route: live intelligence status ───────────────────────────────────────────
 router.get("/raksh/intelligence/status", async (_req, res) => {
   try {
     const data = await fetchLiveIntelligence();
@@ -499,10 +356,10 @@ router.get("/raksh/intelligence/status", async (_req, res) => {
   }
 });
 
-// ── Route: Daily Disaster Brief ───────────────────────────────────────────────
+// ── Route: Daily Disaster Brief ────────────────────────────────────────────────
 router.get("/raksh/brief", async (_req, res) => {
-  const gemini = getGeminiClient();
-  if (!gemini) {
+  const provider = getAIProvider();
+  if (!provider.isGeminiReady()) {
     res.status(503).json({ error: "Gemini API key not configured" });
     return;
   }
@@ -532,9 +389,7 @@ router.get("/raksh/brief", async (_req, res) => {
 
 Be specific. Use actual event names, magnitudes, and locations from the data. Cite your sources. If live data is unavailable for a section, state it clearly. Do NOT hallucinate events.`;
 
-    const model = getGeminiModel(gemini, systemInstruction);
-    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-    const text = result.response.text();
+    const text = await provider.generate(systemInstruction, prompt);
 
     res.json({
       content: text,
@@ -542,8 +397,8 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
         fetchedAt: liveData.fetchedAt,
         sources: {
           earthquakes: { ok: liveData.earthquakes.ok, count: liveData.earthquakes.significant_week.length },
-          events: { ok: liveData.events.ok, count: liveData.events.items.length },
-          alerts: { ok: liveData.weatherAlerts.ok, count: liveData.weatherAlerts.items.length },
+          events:      { ok: liveData.eonet.ok,        count: liveData.eonet.items.length },
+          alerts:      { ok: liveData.weatherAlerts.ok, count: liveData.weatherAlerts.items.length },
         },
       },
     });
@@ -552,24 +407,12 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
   }
 });
 
-// ── Route: Gemini status ──────────────────────────────────────────────────────
+// ── Route: AI Provider status ──────────────────────────────────────────────────
 router.get("/raksh/status", (_req, res) => {
-  const gemini = getGeminiClient();
-  const hasOpenRouter = !!process.env["OPENROUTER_API_KEY"];
-  const hasGroq = !!process.env["GROQ_API_KEY"];
-  res.json({
-    ok: !!gemini,
-    model: gemini?.model ?? null,
-    timestamp: Date.now(),
-    providers: {
-      gemini: { available: !!gemini, status: providerStatus["gemini"] },
-      openrouter: { available: hasOpenRouter, status: providerStatus["openrouter"] },
-      groq: { available: hasGroq, status: providerStatus["groq"] },
-    },
-  });
+  res.json(getAIProvider().getStatus());
 });
 
-// ── Route: Image analysis via Gemini Vision ───────────────────────────────────
+// ── Route: Image analysis via Gemini Vision ────────────────────────────────────
 router.post("/raksh/analyze-image", async (req, res) => {
   const { imageData, mimeType, userPrompt } = req.body as {
     imageData: string;
@@ -582,8 +425,8 @@ router.post("/raksh/analyze-image", async (req, res) => {
     return;
   }
 
-  const gemini = getGeminiClient();
-  if (!gemini) {
+  const provider = getAIProvider();
+  if (!provider.isGeminiReady()) {
     res.status(503).json({ error: "Gemini not configured" });
     return;
   }
@@ -601,28 +444,15 @@ router.post("/raksh/analyze-image", async (req, res) => {
     `If this is not disaster-related, still describe fully and note any environmental or safety context.`;
 
   try {
-    const model = gemini.genAI.getGenerativeModel({
-      model: gemini.model,
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-      ],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
-    });
-    const result = await withTimeout(
-      model.generateContent([prompt, { inlineData: { data: imageData, mimeType } }]),
-      TIMEOUT_MS,
-    );
-    res.json({ content: result.response.text() });
+    const content = await provider.analyzeImage(BASE_SYSTEM_PROMPT, imageData, mimeType, prompt);
+    res.json({ content });
   } catch (err) {
     console.error("[Raksh] Image analysis error:", err);
     res.status(500).json({ error: err instanceof Error ? err.message : "Image analysis failed" });
   }
 });
 
-// ── Route: Document analysis ──────────────────────────────────────────────────
+// ── Route: Document analysis ───────────────────────────────────────────────────
 router.post("/raksh/analyze-document", async (req, res) => {
   const { content: docContent, fileName, userPrompt } = req.body as {
     content: string;
@@ -635,8 +465,8 @@ router.post("/raksh/analyze-document", async (req, res) => {
     return;
   }
 
-  const gemini = getGeminiClient();
-  if (!gemini) {
+  const provider = getAIProvider();
+  if (!provider.isGeminiReady()) {
     res.status(503).json({ error: "Gemini not configured" });
     return;
   }
@@ -656,16 +486,15 @@ router.post("/raksh/analyze-document", async (req, res) => {
     (docContent.length > 32000 ? "\n\n[Content truncated — showing first 32,000 characters]" : "");
 
   try {
-    const model = getGeminiModel(gemini, BASE_SYSTEM_PROMPT);
-    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-    res.json({ content: result.response.text() });
+    const content = await provider.generate(BASE_SYSTEM_PROMPT, prompt);
+    res.json({ content });
   } catch (err) {
     console.error("[Raksh] Document analysis error:", err);
     res.status(500).json({ error: err instanceof Error ? err.message : "Document analysis failed" });
   }
 });
 
-// ── Route: Main chat with multi-provider fallback ─────────────────────────────
+// ── Route: Main chat with multi-provider fallback ──────────────────────────────
 router.post("/raksh/chat", async (req, res) => {
   const { messages, context } = req.body as {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -686,120 +515,31 @@ router.post("/raksh/chat", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
 
-  const geminiAvailable = !!getGeminiClient();
-  const openrouterAvailable = !!process.env["OPENROUTER_API_KEY"];
-  const groqAvailable = !!process.env["GROQ_API_KEY"];
-  console.log(`[Raksh] Chat request — msg: "${lastMessage.content.slice(0, 60)}" | providers: gemini=${geminiAvailable} openrouter=${openrouterAvailable} groq=${groqAvailable}`);
+  const history = toGeminiHistory(messages);
+  const provider = getAIProvider();
 
-  // ── Try Gemini first ──────────────────────────────────────────────────────
-  const gemini = getGeminiClient();
-  if (gemini && isProviderCooledDown("gemini")) {
-    let attempt = 0;
-    let geminiSucceeded = false;
-    while (attempt <= MAX_RETRIES) {
-      try {
-        console.log(`[Raksh] Gemini attempt ${attempt + 1} starting`);
-        const history = toGeminiHistory(messages);
-        const model = getGeminiModel(gemini, systemInstruction);
-        const chat = model.startChat({ history });
-        const streamResult = await withTimeout(
-          chat.sendMessageStream(lastMessage.content),
-          TIMEOUT_MS,
-        );
+  console.log(`[Raksh] Chat — "${lastMessage.content.slice(0, 60)}" | gemini=${provider.isGeminiReady()}`);
 
-        let chunkCount = 0;
-        for await (const chunk of streamResult.stream) {
-          const text = chunk.text();
-          if (text) {
-            res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-            chunkCount++;
-          }
-        }
-        console.log(`[Raksh] Gemini stream complete — ${chunkCount} chunks sent`);
-        res.write("data: [DONE]\n\n");
-        res.end();
-        geminiSucceeded = true;
-        return;
-      } catch (err: unknown) {
-        attempt++;
-        const message = err instanceof Error ? err.message : "Gemini request failed";
-        console.error(`[Raksh] Gemini attempt ${attempt} error:`, message.slice(0, 200));
-
-        if (isQuotaExhaustedError(message)) {
-          markProviderFailed("gemini", 60 * 60_000);
-          console.warn("[Raksh] Gemini daily quota exhausted — switching to fallback providers.");
-          break;
-        }
-        if (isTransientError(message) && attempt <= MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 800 * attempt));
-          continue;
-        }
-        if (isTransientError(message)) {
-          markProviderFailed("gemini", 5 * 60_000);
-        }
-        break;
-      }
-    }
-    if (geminiSucceeded) return;
-  } else {
-    console.warn("[Raksh] Gemini skipped —", !gemini ? "GEMINI_API_KEY not set" : "provider in cooldown");
-  }
-
-  // ── Fallback: notify user then try OpenRouter / Groq ─────────────────────
-  const hasBackup = (isProviderCooledDown("openrouter") && openrouterAvailable) ||
-                    (isProviderCooledDown("groq") && groqAvailable);
-  if (hasBackup) {
-    res.write(`data: ${JSON.stringify({ content: "Primary AI is temporarily unavailable. Switching to backup AI...\n\n" })}\n\n`);
-  }
-
-  // Try OpenRouter
-  if (isProviderCooledDown("openrouter") && openrouterAvailable) {
-    console.log("[Raksh] Trying OpenRouter fallback");
-    try {
-      const text = await callOpenRouter(systemInstruction, lastMessage.content);
-      if (text) {
-        console.log("[Raksh] OpenRouter succeeded");
+  try {
+    await provider.streamChat(
+      systemInstruction,
+      history,
+      lastMessage.content,
+      (text: string) => {
         res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-        res.write("data: [DONE]\n\n");
-        res.end();
-        return;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      console.error("[Raksh] OpenRouter error:", msg.slice(0, 200));
-      if (isTransientError(msg)) markProviderFailed("openrouter");
-    }
+      },
+    );
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "AI unavailable";
+    console.error("[Raksh] streamChat failed:", msg);
+    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+    res.end();
   }
-
-  // Try Groq
-  if (isProviderCooledDown("groq") && groqAvailable) {
-    console.log("[Raksh] Trying Groq fallback");
-    try {
-      const text = await callGroq(systemInstruction, lastMessage.content);
-      if (text) {
-        console.log("[Raksh] Groq succeeded");
-        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
-        res.write("data: [DONE]\n\n");
-        res.end();
-        return;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      console.error("[Raksh] Groq error:", msg.slice(0, 200));
-      if (isTransientError(msg)) markProviderFailed("groq");
-    }
-  }
-
-  // All providers failed — send structured error so frontend can display it
-  console.error("[Raksh] All providers failed. gemini=", geminiAvailable, "openrouter=", openrouterAvailable, "groq=", groqAvailable);
-  const noKeyMsg = !geminiAvailable && !openrouterAvailable && !groqAvailable
-    ? "No AI provider API keys are configured. Please set GEMINI_API_KEY in the project secrets."
-    : "All AI providers are temporarily unavailable. Please try again in a moment.";
-  res.write(`data: ${JSON.stringify({ error: noKeyMsg })}\n\n`);
-  res.end();
 });
 
-// ── Route: AI Image Generation with fallback ──────────────────────────────────
+// ── Route: AI Image Generation ─────────────────────────────────────────────────
 router.post("/raksh/generate-image", async (req, res) => {
   const {
     prompt,
@@ -818,17 +558,17 @@ router.post("/raksh/generate-image", async (req, res) => {
     return;
   }
 
-  const isPortrait = /poster|infographic|flyer|guide|vertical|tall/i.test(prompt);
+  const isPortrait  = /poster|infographic|flyer|guide|vertical|tall/i.test(prompt);
   const isLandscape = /banner|wide|horizontal|landscape/i.test(prompt);
-  const width = reqWidth ?? (isLandscape ? 1216 : isPortrait ? 832 : 1024);
-  const height = reqHeight ?? (isLandscape ? 512 : isPortrait ? 1152 : 1024);
-  const seed = reqSeed ?? Math.floor(Math.random() * 999_999);
+  const width  = reqWidth  ?? (isLandscape ? 1216 : isPortrait ? 832  : 1024);
+  const height = reqHeight ?? (isLandscape ? 512  : isPortrait ? 1152 : 1024);
+  const seed   = reqSeed   ?? Math.floor(Math.random() * 999_999);
 
-  // Enhance prompt with Gemini if available
-  const gemini = getGeminiClient();
+  // Optionally enhance prompt with Gemini
+  const provider = getAIProvider();
   let enhancedPrompt = prompt;
 
-  if (gemini) {
+  if (provider.isGeminiReady()) {
     try {
       const enhanceSystem = `You are a professional image prompt engineer for disaster preparedness and emergency management graphics.
 Enhance the user's prompt to be more detailed and visually impactful for AI image generation.
@@ -840,18 +580,14 @@ Guidelines:
 - For banners: add "wide format, striking design, high impact"
 - Always include: "high quality, professional design, sharp, detailed"
 - Keep under 150 words.`;
-      const enhanceModel = getGeminiModel(gemini, enhanceSystem);
-      const result = await withTimeout(enhanceModel.generateContent(prompt), 10_000);
-      const t = result.response.text().trim();
-      if (t.length > 20) enhancedPrompt = t;
+      const t = await provider.generate(enhanceSystem, prompt, 0.6, 500);
+      if (t.trim().length > 20) enhancedPrompt = t.trim();
     } catch {
       // Use original prompt if enhancement fails
     }
   }
 
   const finalPrompt = `${enhancedPrompt}, ultra detailed, professional quality, 4k`;
-
-  // Try Pollinations/Flux (primary)
   const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
   try {
@@ -864,31 +600,20 @@ Guidelines:
     });
     clearTimeout(timer);
 
-    if (!imageResp.ok) {
-      throw new Error(`Pollinations returned ${imageResp.status}`);
-    }
+    if (!imageResp.ok) throw new Error(`Pollinations returned ${imageResp.status}`);
 
     const contentType = (imageResp.headers.get("content-type") ?? "image/jpeg").split(";")[0]!;
     const arrayBuffer = await imageResp.arrayBuffer();
     const imageData = Buffer.from(arrayBuffer).toString("base64");
 
-    res.json({
-      imageData,
-      mimeType: contentType,
-      prompt,
-      enhancedPrompt: finalPrompt,
-      provider: "pollinations/flux",
-      seed,
-      width,
-      height,
-    });
+    res.json({ imageData, mimeType: contentType, prompt, enhancedPrompt: finalPrompt, provider: "pollinations/flux", seed, width, height });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Image generation failed";
     res.status(500).json({ error: msg });
   }
 });
 
-// ── Route: Disaster Simulation ────────────────────────────────────────────────
+// ── Route: Disaster Simulation ─────────────────────────────────────────────────
 router.post("/raksh/simulate", async (req, res) => {
   const { disasterType, magnitude, location, population } = req.body as {
     disasterType: string;
@@ -902,8 +627,8 @@ router.post("/raksh/simulate", async (req, res) => {
     return;
   }
 
-  const gemini = getGeminiClient();
-  if (!gemini) {
+  const provider = getAIProvider();
+  if (!provider.isGeminiReady()) {
     res.status(503).json({ error: "Gemini not configured" });
     return;
   }
@@ -942,13 +667,9 @@ Make resources have 8-10 entries.
 Be specific and realistic based on the location and disaster type.`;
 
   try {
-    const model = getGeminiModel(gemini, BASE_SYSTEM_PROMPT);
-    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-    const text = result.response.text().trim();
-
+    const text = (await provider.generate(BASE_SYSTEM_PROMPT, prompt, 0.7, 4096)).trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("Invalid simulation response");
-
     const data = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
     res.json({ simulation: data, generatedAt: new Date().toISOString() });
   } catch (err) {
@@ -957,10 +678,10 @@ Be specific and realistic based on the location and disaster type.`;
   }
 });
 
-// ── Route: Comprehensive Intelligence Report ──────────────────────────────────
+// ── Route: Comprehensive Intelligence Report ────────────────────────────────────
 router.post("/raksh/generate-report", async (req, res) => {
-  const gemini = getGeminiClient();
-  if (!gemini) {
+  const provider = getAIProvider();
+  if (!provider.isGeminiReady()) {
     res.status(503).json({ error: "Gemini API key not configured" });
     return;
   }
@@ -982,9 +703,9 @@ router.post("/raksh/generate-report", async (req, res) => {
     const dateStr = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 
-    const focusLine = focusArea ? `\n**Focus Area:** ${focusArea}` : "";
-    const locationLine = location ? `\n**Geographic Focus:** ${location}` : "";
-    const contextLine = userContext ? `\n**Context:** ${userContext}` : "";
+    const focusLine    = focusArea    ? `\n**Focus Area:** ${focusArea}`         : "";
+    const locationLine = location     ? `\n**Geographic Focus:** ${location}`    : "";
+    const contextLine  = userContext  ? `\n**Context:** ${userContext}`           : "";
 
     const prompt = `Generate a detailed, professional Earth Guardian AI Disaster Intelligence Report using ALL live data available.${focusLine}${locationLine}${contextLine}
 
@@ -1057,9 +778,7 @@ Use this EXACT report structure:
 
 Be specific and data-driven. Use actual event names, magnitudes, and locations from the live data. If data is unavailable for a section, state it clearly. Do NOT fabricate events.`;
 
-    const model = getGeminiModel(gemini, systemInstruction);
-    const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-    const report = result.response.text();
+    const report = await provider.generate(systemInstruction, prompt);
 
     res.json({
       content: report,
@@ -1069,8 +788,8 @@ Be specific and data-driven. Use actual event names, magnitudes, and locations f
         fetchedAt: liveData.fetchedAt,
         sources: {
           earthquakes: { ok: liveData.earthquakes.ok, count: liveData.earthquakes.significant_week.length },
-          events: { ok: liveData.eonet.ok, count: liveData.eonet.items.length },
-          alerts: { ok: liveData.weatherAlerts.ok, count: liveData.weatherAlerts.items.length },
+          events:      { ok: liveData.eonet.ok,        count: liveData.eonet.items.length },
+          alerts:      { ok: liveData.weatherAlerts.ok, count: liveData.weatherAlerts.items.length },
         },
       },
     });

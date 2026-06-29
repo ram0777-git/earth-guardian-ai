@@ -1,9 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { logStartupStatus } from "./ai/provider";
 
-const geminiKeyPresent = !!process.env.GEMINI_API_KEY;
-console.log("Gemini Loaded:", geminiKeyPresent);
-console.log("[Raksh] Model: gemini-2.5-flash-lite |", geminiKeyPresent ? "Key detected — Gemini ready" : "GEMINI_API_KEY not set — AI will not function");
+logStartupStatus();
 
 const rawPort = process.env["PORT"];
 
