@@ -19,6 +19,11 @@ const RakshAIPage            = lazy(() => import("@/pages/RakshAIPage"));
 const ImageGalleryPage       = lazy(() => import("@/pages/ImageGalleryPage"));
 const DisasterSimulationPage = lazy(() => import("@/pages/DisasterSimulationPage"));
 const ReportsPage            = lazy(() => import("@/pages/ReportsPage"));
+const CommandCenterPage      = lazy(() => import("@/pages/CommandCenterPage"));
+const DailyBriefPage         = lazy(() => import("@/pages/DailyBriefPage"));
+const SituationPage          = lazy(() => import("@/pages/SituationPage"));
+const DecisionAssistantPage  = lazy(() => import("@/pages/DecisionAssistantPage"));
+const TimelinePage           = lazy(() => import("@/pages/TimelinePage"));
 const NotFound               = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -57,6 +62,11 @@ function Router() {
         <Route path="/image-gallery"      component={ImageGalleryPage} />
         <Route path="/simulation"         component={DisasterSimulationPage} />
         <Route path="/reports"            component={ReportsPage} />
+        <Route path="/command-center"     component={CommandCenterPage} />
+        <Route path="/daily-brief"        component={DailyBriefPage} />
+        <Route path="/situation"          component={SituationPage} />
+        <Route path="/decision"           component={DecisionAssistantPage} />
+        <Route path="/timeline"           component={TimelinePage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

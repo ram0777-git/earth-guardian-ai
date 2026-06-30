@@ -996,5 +996,115 @@ Respond with ONLY this JSON structure:
   }
 });
 
+// ── POST /raksh/decision — AI Emergency Decision Assistant ─────────────────
+router.post("/decision", async (req, res) => {
+  const { disasterType, magnitude, location, population } = req.body as {
+    disasterType?: string;
+    magnitude?: string;
+    location?: string;
+    population?: number;
+  };
+
+  if (!disasterType || !location) {
+    return res.status(400).json({ error: "disasterType and location are required." });
+  }
+
+  const pop = population ?? 500_000;
+  const mag = magnitude ?? "Moderate";
+
+  const prompt = `You are a disaster response AI. Generate a comprehensive emergency decision plan for the following scenario.
+
+SCENARIO:
+- Disaster Type: ${disasterType}
+- Severity/Magnitude: ${mag}
+- Location: ${location}
+- Estimated Population: ${pop.toLocaleString()}
+
+Return ONLY valid JSON (no markdown, no code blocks) with this EXACT structure:
+{
+  "impact": {
+    "peopleAffected": <integer estimate>,
+    "infrastructureDamage": "<percentage or description, e.g. '35% moderate damage'>",
+    "economicLoss": "<dollar estimate, e.g. '$2.4B'>",
+    "evacuationRadius": "<distance, e.g. '25 km'>",
+    "severityScore": <integer 0-100>,
+    "confidence": <integer 50-95>
+  },
+  "actions": [
+    {
+      "phase": "<phase name, e.g. 'Immediate Response'>",
+      "priority": "<one of: immediate|high|medium|low>",
+      "action": "<concise action title>",
+      "rationale": "<1 sentence explanation>",
+      "timeframe": "<e.g. '0-30 min'>"
+    }
+  ],
+  "resources": {
+    "ambulances": <integer>,
+    "hospitals": <integer beds needed>,
+    "rescueTeams": <integer personnel>,
+    "foodPackages": <integer>,
+    "waterLiters": <integer>,
+    "shelterUnits": <integer>,
+    "personnel": <integer total>,
+    "helicopters": <integer>
+  },
+  "confidence": <number 0.0-1.0>
+}
+
+Generate exactly 8 actions in the "actions" array, ordered from most to least urgent. Scale resources to the population size and disaster severity. Be specific and realistic.`;
+
+  try {
+    const provider = await getAIProvider();
+    const raw      = await withTimeout(provider.generate("You are a disaster response AI. Return only valid JSON.", prompt), 30_000);
+    const cleaned  = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const jsonStart = cleaned.indexOf("{");
+    const jsonEnd   = cleaned.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error("Invalid JSON from AI");
+    const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+
+    return res.json({ ...parsed, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("[Raksh] Decision assistant error:", err);
+    // Structured fallback
+    const severityMap: Record<string, number> = { Minor: 25, Moderate: 50, Strong: 65, Major: 78, Great: 92 };
+    const score = Object.entries(severityMap).find(([k]) => mag.includes(k))?.[1] ?? 55;
+    const affected = Math.round(pop * (score / 100) * 0.15);
+    return res.json({
+      impact: {
+        peopleAffected: affected,
+        infrastructureDamage: score >= 75 ? "Widespread — 40-60% structures" : score >= 50 ? "Moderate — 20-35% structures" : "Localized — 5-15% structures",
+        economicLoss: `$${(affected * 0.008 / 1e9).toFixed(1)}B estimated`,
+        evacuationRadius: `${Math.round(score / 5)} km`,
+        severityScore: score,
+        confidence: 72,
+      },
+      actions: [
+        { phase: "Immediate Response",    priority: "immediate", action: "Activate Emergency Operations Center",          rationale: "Centralize coordination and establish unified command.",                      timeframe: "0-15 min" },
+        { phase: "Immediate Response",    priority: "immediate", action: "Deploy Search and Rescue teams",                rationale: "Maximize survival rates by reaching trapped victims within golden hour.",   timeframe: "0-30 min" },
+        { phase: "Immediate Response",    priority: "immediate", action: "Issue public emergency alert",                  rationale: "Inform population of danger zones and evacuation routes.",                 timeframe: "0-20 min" },
+        { phase: "Life Safety",           priority: "high",      action: "Establish medical triage centers",             rationale: "Treat injured and prevent secondary casualties.",                          timeframe: "30-90 min" },
+        { phase: "Life Safety",           priority: "high",      action: "Open emergency shelters",                      rationale: "House displaced population and vulnerable groups safely.",                 timeframe: "1-2 hrs" },
+        { phase: "Infrastructure",        priority: "high",      action: "Assess critical infrastructure damage",         rationale: "Prioritize restoration of power, water, and communications.",             timeframe: "2-4 hrs" },
+        { phase: "Logistics",             priority: "medium",    action: "Pre-position food, water, and medical supplies", rationale: "Prevent secondary casualties from lack of basic necessities.",           timeframe: "3-6 hrs" },
+        { phase: "Recovery",              priority: "medium",    action: "Coordinate international aid requests",         rationale: "Scale response capacity if local resources are overwhelmed.",             timeframe: "4-8 hrs" },
+      ],
+      resources: {
+        ambulances:   Math.round(affected / 500),
+        hospitals:    Math.round(affected / 100),
+        rescueTeams:  Math.round(affected / 200),
+        foodPackages: Math.round(affected * 3),
+        waterLiters:  Math.round(affected * 4),
+        shelterUnits: Math.round(affected / 5),
+        personnel:    Math.round(affected / 50),
+        helicopters:  Math.round(score / 10),
+      },
+      confidence: 0.72,
+      generatedAt: new Date().toISOString(),
+    });
+  }
+});
+
 export default router;
+
 
