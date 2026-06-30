@@ -407,6 +407,18 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
 
 // ── Route: AI Provider status ──────────────────────────────────────────────────
 router.get("/raksh/status", (_req, res) => {
+  const status = getAIProvider().getStatus();
+  res.json({
+    gemini:          status.providerHealth.gemini.available,
+    openrouter:      status.providerHealth.openrouter.available,
+    groq:            status.providerHealth.groq.available,
+    currentProvider: status.currentProvider,
+    healthy:         status.healthy,
+  });
+});
+
+// ── Route: Full AI Provider status (verbose) ───────────────────────────────────
+router.get("/raksh/status/full", (_req, res) => {
   res.json(getAIProvider().getStatus());
 });
 

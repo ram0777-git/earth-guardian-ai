@@ -547,36 +547,10 @@ export function logStartupStatus(): void {
   const orDiag  = getOpenRouterDiagnostics();
   const grDiag  = getGroqDiagnostics();
 
-  console.log("✓ Environment loaded");
-  console.log(`  node: ${process.version} | env: ${process.env["NODE_ENV"] ?? "unknown"} | platform: ${process.platform}`);
-
-  if (gemDiag.envKeyPresent) {
-    console.log("✓ Gemini Ready");
-    console.log(`  key present: true | key length: ${gemDiag.envKeyLength} | model: ${GEMINI_MODEL}`);
-  } else {
-    console.warn("✗ Gemini NOT ready — GEMINI_API_KEY missing from Replit Secrets");
-  }
-
-  if (orDiag.envKeyPresent) {
-    console.log("✓ OpenRouter Ready");
-    console.log(`  key present: true | key length: ${orDiag.envKeyLength}`);
-  } else {
-    console.log("  OpenRouter: no key (optional fallback — add OPENROUTER_API_KEY to enable)");
-  }
-
-  if (grDiag.envKeyPresent) {
-    console.log("✓ Groq Ready");
-    console.log(`  key present: true | key length: ${grDiag.envKeyLength}`);
-  } else {
-    console.log("  Groq: no key (optional fallback — add GROQ_API_KEY to enable)");
-  }
-
-  const ready = [
-    gemDiag.envKeyPresent && "Gemini",
-    orDiag.envKeyPresent  && "OpenRouter",
-    grDiag.envKeyPresent  && "Groq",
-  ].filter(Boolean);
-
-  console.log(`✓ Provider Manager Ready — ${ready.length}/3 providers available: [${ready.join(", ")}]`);
-  console.log("✓ Raksh AI Ready");
+  console.log("[Startup]");
+  console.log("✓ Environment Loaded");
+  console.log(`✓ GEMINI_API_KEY: ${gemDiag.envKeyPresent ? "Found" : "Missing"}`);
+  console.log(`✓ OPENROUTER_API_KEY: ${orDiag.envKeyPresent ? "Found" : "Missing"}`);
+  console.log(`✓ GROQ_API_KEY: ${grDiag.envKeyPresent ? "Found" : "Missing"}`);
+  console.log("✓ AI Providers Ready");
 }
