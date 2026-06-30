@@ -1117,6 +1117,213 @@ Generate exactly 8 actions in the "actions" array, ordered from most to least ur
   }
 });
 
+// ── Route: AI Incident Panel (per-event AI analysis) ──────────────────────────
+const _incidentCache = new Map<string, { data: object; expiresAt: number }>();
+
+router.get("/raksh/incident-panel", async (req, res) => {
+  const { type = "", name = "", severity = "", location = "", detail = "", source = "" } =
+    req.query as Record<string, string>;
+
+  if (!type || !name) {
+    res.status(400).json({ error: "type and name are required" });
+    return;
+  }
+
+  const cacheKey = `${type}::${name}::${severity}`;
+  const now = Date.now();
+  const cached = _incidentCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    res.json(cached.data);
+    return;
+  }
+
+  const provider = getAIProvider();
+  const prompt = `You are Raksh AI, a global disaster intelligence expert. Analyze this specific disaster event and respond ONLY with valid JSON (no markdown, no code fences, no explanation).
+
+Event details:
+- Name: ${name}
+- Type: ${type}
+- Severity: ${severity || "unknown"}
+- Location: ${location || "unknown"}
+- Detail: ${detail || "none"}
+- Data Source: ${source || "unknown"}
+
+Return ONLY this JSON:
+{
+  "summary": "2-3 sentence expert analysis of this event and its current status",
+  "populationAffected": "estimated people at risk (e.g. '2.3M people', '450K residents')",
+  "predictedImpact": "what is likely to happen in the next 24-48 hours for this specific event",
+  "recommendedActions": ["action 1", "action 2", "action 3"],
+  "confidenceScore": <integer 60-95>
+}`;
+
+  try {
+    const raw = await withTimeout(
+      provider.generate("You are a disaster intelligence AI. Return only valid JSON.", prompt, 0.4, 800),
+      18_000,
+    );
+    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const j = cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1);
+    const parsed = JSON.parse(j) as Record<string, unknown>;
+    const response = { ...parsed, lastUpdated: new Date().toISOString(), aiPowered: true };
+    _incidentCache.set(cacheKey, { data: response, expiresAt: now + 5 * 60_000 });
+    res.json(response);
+  } catch (err) {
+    console.error("[Raksh] incident-panel error:", err);
+    const popMap: Record<string, string> = {
+      critical: "est. 500K–2M people",
+      high: "est. 50K–500K people",
+      moderate: "est. 5K–50K people",
+      low: "est. < 5K people",
+    };
+    const fallback = {
+      summary: `${name} is an active ${type} event${location ? ` in ${location}` : ""} classified as ${severity || "moderate"} severity.${detail ? ` ${detail}.` : ""} Emergency response protocols are being evaluated.`,
+      populationAffected: popMap[severity] ?? "Under assessment",
+      predictedImpact: severity === "critical"
+        ? "Immediate escalation likely. Emergency services should be on highest alert. Infrastructure damage and displacement expected."
+        : severity === "high"
+        ? "Situation may worsen over the next 24h. Close monitoring and pre-positioned resources recommended."
+        : "Continued monitoring required. Current conditions stable but could develop.",
+      recommendedActions: [
+        "Monitor official emergency management communications",
+        "Follow local authority guidance and evacuation orders if issued",
+        "Prepare 72-hour emergency supply kit if in potentially affected area",
+      ],
+      confidenceScore: 72,
+      lastUpdated: new Date().toISOString(),
+      aiPowered: false,
+    };
+    _incidentCache.set(cacheKey, { data: fallback, expiresAt: now + 2 * 60_000 });
+    res.json(fallback);
+  }
+});
+
+// ── Route: Unified Intelligence Feed (all sources merged) ──────────────────────
+router.get("/raksh/intelligence-feed", async (_req, res) => {
+  try {
+    const data = await fetchLiveIntelligence();
+
+    const gdacsTypeMap: Record<string, string> = {
+      EQ: "earthquake", TC: "cyclone", FL: "flood",
+      VO: "volcano", WF: "wildfire", DR: "drought", ST: "storm",
+    };
+    const eonetTypeMap: Record<string, string> = {
+      "wildfires": "wildfire", "volcanoes": "volcano", "floods": "flood",
+      "severe storms": "storm", "tropical cyclones": "cyclone",
+      "landslides": "landslide", "earthquakes": "earthquake",
+    };
+
+    type FeedEvent = {
+      id: string; type: string; name: string;
+      lat: number | null; lng: number | null;
+      severity: string; time: string; source: string;
+      country: string; location: string; detail: string;
+      url: string; aiSummary: string;
+    };
+
+    const events: FeedEvent[] = [];
+
+    const addSummary = (type: string, name: string, severity: string, detail: string): string => {
+      const sev = severity.charAt(0).toUpperCase() + severity.slice(1);
+      const d = detail ? ` — ${detail}` : "";
+      return `${sev}-severity ${type}${d}. Active monitoring in progress.`;
+    };
+
+    data.earthquakes.all_24h.forEach(eq => {
+      events.push({
+        id: `usgs-${eq.id}`, type: "earthquake", name: eq.place,
+        lat: eq.lat, lng: eq.lng,
+        severity: eq.magnitude >= 6.5 ? "critical" : eq.magnitude >= 5 ? "high" : eq.magnitude >= 3.5 ? "moderate" : "low",
+        time: eq.time, source: "USGS", country: "", location: eq.place,
+        detail: `M${eq.magnitude}`, url: eq.url,
+        aiSummary: `M${eq.magnitude} earthquake in ${eq.place}. Seismic monitoring active. Aftershocks possible in the 24h window.`,
+      });
+    });
+
+    data.gdacs.items.forEach(ev => {
+      const sev = ev.alertLevel === "Red" ? "critical" : ev.alertLevel === "Orange" ? "high" : "moderate";
+      events.push({
+        id: `gdacs-${ev.id}`, type: gdacsTypeMap[ev.type] ?? "other", name: ev.name,
+        lat: ev.lat ?? null, lng: ev.lng ?? null,
+        severity: sev, time: ev.fromDate, source: "GDACS",
+        country: ev.country || "", location: ev.country || ev.name,
+        detail: ev.severity, url: ev.url,
+        aiSummary: addSummary(gdacsTypeMap[ev.type] ?? ev.type, ev.name, sev, ev.severity),
+      });
+    });
+
+    data.eonet.items.forEach(ev => {
+      const typeLower = ev.type.toLowerCase();
+      const mappedType = eonetTypeMap[typeLower] ?? "other";
+      events.push({
+        id: `eonet-${ev.id}`, type: mappedType, name: ev.title,
+        lat: ev.lat ?? null, lng: ev.lng ?? null,
+        severity: "moderate", time: ev.latestDate, source: "NASA EONET",
+        country: "", location: ev.title, detail: ev.type, url: `https://eonet.gsfc.nasa.gov/api/v3/events/${ev.id}`,
+        aiSummary: `NASA EONET tracking active ${ev.type} event: ${ev.title}. Event coordinates available for field team deployment.`,
+      });
+    });
+
+    data.weatherAlerts.items.forEach((al, i) => {
+      events.push({
+        id: `noaa-${i}`, type: "storm", name: al.event ?? "Weather Alert",
+        lat: null, lng: null,
+        severity: al.severity === "Extreme" ? "critical" : al.severity === "Severe" ? "high" : al.severity === "Moderate" ? "moderate" : "low",
+        time: al.onset ?? new Date().toISOString(), source: "NOAA",
+        country: "USA", location: al.areaDesc ?? "United States",
+        detail: al.headline ?? al.event ?? "", url: al.web ?? "",
+        aiSummary: `NOAA weather alert for ${al.areaDesc ?? "US"}. ${al.headline ?? al.event ?? "Weather event"}. Follow local authorities.`,
+      });
+    });
+
+    // Internal app alerts as feed events
+    const { alerts: internalAlerts, disasters: internalDisasters } = await import("../data/liveData");
+    internalAlerts.forEach(a => {
+      events.push({
+        id: `internal-alert-${a.id}`, type: a.type, name: a.title,
+        lat: null, lng: null,
+        severity: a.severity as string, time: new Date().toISOString(), source: "Earth Guardian",
+        country: "USA", location: a.location, detail: a.time,
+        url: "", aiSummary: `Internal platform alert: ${a.title} in ${a.location}. Earth Guardian monitoring active.`,
+      });
+    });
+
+    internalDisasters.forEach(d => {
+      events.push({
+        id: `internal-${d.id}`, type: d.type, name: d.name,
+        lat: d.lat, lng: d.lng,
+        severity: d.severity, time: d.timestamp, source: "Earth Guardian",
+        country: "USA", location: `${d.lat.toFixed(2)}, ${d.lng.toFixed(2)}`,
+        detail: d.description ?? "", url: "",
+        aiSummary: `Earth Guardian platform event: ${d.name}. ${d.description ?? "Active monitoring in progress."}`,
+      });
+    });
+
+    // Sort newest first (events with valid ISO times first)
+    events.sort((a, b) => {
+      const ta = new Date(a.time).getTime() || 0;
+      const tb = new Date(b.time).getTime() || 0;
+      return tb - ta;
+    });
+
+    res.json({
+      fetchedAt: data.fetchedAt,
+      events,
+      total: events.length,
+      sources: {
+        usgs: data.earthquakes.ok,
+        gdacs: data.gdacs.ok,
+        eonet: data.eonet.ok,
+        noaa: data.weatherAlerts.ok,
+        internal: true,
+      },
+    });
+  } catch (err) {
+    console.error("[Raksh] intelligence-feed error:", err);
+    res.status(500).json({ error: "Intelligence feed temporarily unavailable. Please try again." });
+  }
+});
+
 export default router;
 
 

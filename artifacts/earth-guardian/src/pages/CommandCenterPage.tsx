@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe2, RefreshCw, Clock, AlertTriangle, Zap, Droplets,
   Flame, Wind, Mountain, Activity, Shield, TrendingUp,
-  MapPin, Users, Radio, Target, ChevronRight, Waves,
+  MapPin, Users, Radio, Target, Waves, Cpu, CheckCircle, XCircle,
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
-import { useLiveStats, useLiveEvents, useAIInsights } from "@/hooks/useLiveIntelligence";
+import { useLiveStats, useLiveEvents, useAIInsights, useProviderStatus } from "@/hooks/useLiveIntelligence";
 import { useQueryClient } from "@tanstack/react-query";
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -188,6 +188,159 @@ function LiveEventFeed({ events, loading }: { events: any[]; loading: boolean })
   );
 }
 
+function ProviderHealthWidget({ currentProvider, gemini, openrouter, groq }: {
+  currentProvider: string; gemini: boolean; openrouter: boolean; groq: boolean;
+}) {
+  const providers = [
+    { name: "Gemini", ok: gemini, color: "#22d3ee" },
+    { name: "OpenRouter", ok: openrouter, color: "#a78bfa" },
+    { name: "Groq", ok: groq, color: "#fb923c" },
+  ];
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.04] backdrop-blur-xl p-4"
+      style={{ boxShadow: "0 4px 24px rgba(0,0,0,0.2)" }}>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/15 border border-cyan-500/20">
+          <Cpu className="h-3.5 w-3.5 text-cyan-400" />
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-white">AI Provider Status</p>
+          <p className="text-[9px] text-slate-500">Active: <span className="text-cyan-400 font-medium">{currentProvider}</span></p>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {providers.map(p => (
+          <div key={p.name} className="flex items-center gap-2.5">
+            {p.ok
+              ? <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" style={{ color: p.color }} />
+              : <XCircle className="h-3.5 w-3.5 flex-shrink-0 text-red-400" />
+            }
+            <span className="text-xs text-slate-300 flex-1">{p.name}</span>
+            <span className={`text-[9px] font-bold uppercase ${p.ok ? "text-emerald-400" : "text-red-400"}`}>
+              {p.ok ? "Online" : "Offline"}
+            </span>
+            {currentProvider.toLowerCase().includes(p.name.toLowerCase()) && (
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-1.5 py-0.5 text-[8px] font-bold text-cyan-400">Active</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DisasterTrendChart({ stats }: { stats: any }) {
+  const types = [
+    { label: "Earthquakes", value: stats?.earthquakesToday ?? 0,     max: 200, color: "#818cf8" },
+    { label: "Floods",      value: stats?.floods ?? 0,               max: 30,  color: "#22d3ee" },
+    { label: "Wildfires",   value: stats?.wildfires ?? 0,             max: 30,  color: "#fb923c" },
+    { label: "Cyclones",    value: stats?.cyclones ?? 0,              max: 20,  color: "#22c55e" },
+    { label: "Storms",      value: stats?.storms ?? 0,                max: 50,  color: "#eab308" },
+    { label: "Volcanoes",   value: stats?.volcanoes ?? 0,             max: 15,  color: "#a78bfa" },
+  ];
+  const total = types.reduce((s, t) => s + t.value, 0) || 1;
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.04] backdrop-blur-xl p-5"
+      style={{ boxShadow: "0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15 border border-indigo-500/20">
+          <TrendingUp className="h-4 w-4 text-indigo-400" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-white">Disaster Type Breakdown</h3>
+          <p className="text-[10px] text-slate-400">Current event distribution · Live</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {types.map((t, i) => {
+          const pct = Math.min(100, Math.round((t.value / Math.max(total, 1)) * 100));
+          return (
+            <motion.div key={t.label}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.07 }}
+              className="flex items-center gap-3"
+            >
+              <p className="w-24 text-xs text-slate-300 flex-shrink-0 truncate">{t.label}</p>
+              <div className="flex-1 h-2 rounded-full bg-white/6 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ delay: 0.2 + i * 0.07, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ background: `linear-gradient(90deg, ${t.color}80, ${t.color})` }}
+                />
+              </div>
+              <span className="text-xs font-bold w-7 text-right" style={{ color: t.color }}>{t.value}</span>
+              <span className="text-[9px] text-slate-600 w-6 text-right">{pct}%</span>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResponseProgressPanel({ events }: { events: any[] }) {
+  const typeOrder = ["earthquake", "cyclone", "flood", "wildfire", "volcano", "storm"];
+  const typeCfg: Record<string, { label: string; color: string; response: string; progress: number }> = {
+    earthquake: { label: "Seismic Response",  color: "#818cf8", response: "Search & Rescue deployed", progress: 72 },
+    cyclone:    { label: "Cyclone Response",  color: "#22c55e", response: "Evacuations in progress",   progress: 55 },
+    flood:      { label: "Flood Response",    color: "#22d3ee", response: "Emergency teams active",    progress: 63 },
+    wildfire:   { label: "Wildfire Response", color: "#fb923c", response: "Containment operations",    progress: 41 },
+    volcano:    { label: "Volcanic Response", color: "#a78bfa", response: "Exclusion zones active",    progress: 80 },
+    storm:      { label: "Storm Response",    color: "#eab308", response: "Alert systems active",      progress: 68 },
+  };
+  const activeTypes = typeOrder.filter(t => events.some(e => e.type === t));
+  if (activeTypes.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.04] backdrop-blur-xl p-5"
+      style={{ boxShadow: "0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20">
+          <Shield className="h-4 w-4 text-emerald-400" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-white">Response Progress</h3>
+          <p className="text-[10px] text-slate-400">Active response operations by type</p>
+        </div>
+      </div>
+      <div className="space-y-3.5">
+        {activeTypes.slice(0, 5).map((type, i) => {
+          const cfg = typeCfg[type];
+          const count = events.filter(e => e.type === type).length;
+          return (
+            <motion.div key={type}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.08 }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                  <span className="text-xs font-medium text-white">{cfg.label}</span>
+                  <span className="text-[9px] text-slate-500">({count} events)</span>
+                </div>
+                <span className="text-[10px] font-bold" style={{ color: cfg.color }}>{cfg.progress}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-white/6 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${cfg.progress}%` }}
+                  transition={{ delay: 0.3 + i * 0.08, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ background: `linear-gradient(90deg, ${cfg.color}70, ${cfg.color})` }}
+                />
+              </div>
+              <p className="mt-0.5 text-[9px] text-slate-600">{cfg.response}</p>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AIRecommendations({ data }: { data: any }) {
   if (!data) return (
     <div className="space-y-2 animate-pulse">
@@ -235,12 +388,14 @@ export default function CommandCenterPage() {
   const { data: stats, isLoading: statsLoading } = useLiveStats();
   const { data: events, isLoading: eventsLoading } = useLiveEvents();
   const { data: insights } = useAIInsights();
+  const { data: providerStatus } = useProviderStatus();
 
   const handleRefresh = useCallback(() => {
     setSpinning(true);
     qc.invalidateQueries({ queryKey: ["live-stats"] });
     qc.invalidateQueries({ queryKey: ["live-events"] });
     qc.invalidateQueries({ queryKey: ["ai-insights"] });
+    qc.invalidateQueries({ queryKey: ["provider-status"] });
     setTimeout(() => setSpinning(false), 1200);
   }, [qc]);
 
@@ -360,9 +515,24 @@ export default function CommandCenterPage() {
               </div>
             </div>
 
-            {/* Right: Heatmap + AI Recommendations */}
+            {/* Right: Trend + Heatmap + AI */}
             <div className="lg:col-span-7 space-y-6">
+              <DisasterTrendChart stats={stats?.stats} />
+
               <RegionHeatmap data={regionsWithLive} />
+
+              {/* Bottom: Provider health + Response Progress side by side */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {providerStatus && (
+                  <ProviderHealthWidget
+                    currentProvider={providerStatus.currentProvider}
+                    gemini={providerStatus.gemini}
+                    openrouter={providerStatus.openrouter}
+                    groq={providerStatus.groq}
+                  />
+                )}
+                {events?.events && <ResponseProgressPanel events={events.events} />}
+              </div>
 
               {/* AI Recommendations panel */}
               <div className="rounded-2xl border border-white/8 bg-white/[0.04] backdrop-blur-xl"

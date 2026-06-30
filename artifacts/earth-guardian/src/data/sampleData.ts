@@ -30,6 +30,7 @@ export const navLinks = [
   { href: "/image-gallery", label: "Gallery" },
   { href: "/volunteer-network", label: "Volunteers" },
   { href: "/raksh", label: "Raksh AI" },
+  { href: "/intelligence-feed", label: "Intel Feed" },
   { href: "/about", label: "About" },
 ];
 

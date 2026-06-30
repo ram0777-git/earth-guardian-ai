@@ -24,6 +24,7 @@ const DailyBriefPage         = lazy(() => import("@/pages/DailyBriefPage"));
 const SituationPage          = lazy(() => import("@/pages/SituationPage"));
 const DecisionAssistantPage  = lazy(() => import("@/pages/DecisionAssistantPage"));
 const TimelinePage           = lazy(() => import("@/pages/TimelinePage"));
+const IntelligenceFeedPage   = lazy(() => import("@/pages/IntelligenceFeedPage"));
 const NotFound               = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -67,6 +68,7 @@ function Router() {
         <Route path="/situation"          component={SituationPage} />
         <Route path="/decision"           component={DecisionAssistantPage} />
         <Route path="/timeline"           component={TimelinePage} />
+        <Route path="/intelligence-feed"  component={IntelligenceFeedPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

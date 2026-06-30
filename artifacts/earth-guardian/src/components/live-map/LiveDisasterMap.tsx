@@ -8,7 +8,7 @@ import {
   Zap, Droplets, Flame, Wind, Waves, Mountain, AlertTriangle,
   Globe, Clock, Users, Gauge,
   X, SlidersHorizontal, CheckSquare, Square,
-  Crosshair, Maximize2, Minimize2, Home,
+  Crosshair, Maximize2, Minimize2, Home, Brain, Shield, TrendingUp,
 } from "lucide-react";
 import { useGetDisasters } from "@workspace/api-client-react";
 import { DISASTER_TYPE_CONFIG, type DisasterEvent } from "@/data/mapData";
@@ -875,6 +875,111 @@ export function LiveDisasterMap() {
   );
 }
 
+/* ── AI Incident Section ─────────────────────────────────── */
+
+const BASE_URL = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+
+interface IncidentAIData {
+  summary: string;
+  populationAffected: string;
+  predictedImpact: string;
+  recommendedActions: string[];
+  confidenceScore: number;
+  aiPowered?: boolean;
+}
+
+function AIIncidentSection({ event }: { event: DisasterEvent }) {
+  const [data, setData] = useState<IncidentAIData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setData(null);
+    setLoading(true);
+    const params = new URLSearchParams({
+      type:     event.type,
+      name:     event.title,
+      severity: event.severity,
+      location: event.location,
+      detail:   event.description ?? (event.magnitude !== undefined ? `M${event.magnitude}` : ""),
+      source:   event.source,
+    });
+    fetch(`${BASE_URL}/api/raksh/incident-panel?${params.toString()}`)
+      .then(r => r.json())
+      .then((d: IncidentAIData) => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [event.id]);
+
+  if (loading) {
+    return (
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center gap-1.5 mb-2">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-cyan-400" />
+          </span>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-cyan-400/70">Raksh AI Analyzing…</p>
+        </div>
+        {[48, 64, 40].map((h, i) => (
+          <div key={i} className={`h-${h === 48 ? "12" : h === 64 ? "16" : "10"} animate-pulse rounded-xl border border-white/6 bg-white/[0.03]`} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <div className="mt-4 space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Brain className="h-3 w-3 text-cyan-400" />
+        <p className="text-[9px] font-bold uppercase tracking-widest text-cyan-400/80">
+          Raksh AI Analysis {data.aiPowered === false && <span className="text-slate-600">(fallback)</span>}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/5 p-3">
+        <p className="text-[11px] leading-relaxed text-slate-200">{data.summary}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border border-white/6 bg-white/[0.03] p-2.5">
+          <div className="flex items-center gap-1 text-[9px] text-slate-500 mb-1">
+            <Users className="h-2.5 w-2.5" />Population at Risk
+          </div>
+          <p className="text-[11px] font-bold text-orange-400">{data.populationAffected}</p>
+        </div>
+        <div className="rounded-xl border border-white/6 bg-white/[0.03] p-2.5">
+          <div className="flex items-center gap-1 text-[9px] text-slate-500 mb-1">
+            <Gauge className="h-2.5 w-2.5" />AI Confidence
+          </div>
+          <p className="text-[11px] font-bold text-cyan-400">{data.confidenceScore}%</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-400/15 bg-amber-400/5 p-3">
+        <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-amber-400/70 mb-1">
+          <TrendingUp className="h-2.5 w-2.5" />Predicted Impact
+        </div>
+        <p className="text-[11px] text-slate-300 leading-relaxed">{data.predictedImpact}</p>
+      </div>
+
+      <div className="rounded-xl border border-white/6 bg-white/[0.03] p-3">
+        <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+          <Shield className="h-2.5 w-2.5" />Recommended Actions
+        </div>
+        <div className="space-y-1.5">
+          {data.recommendedActions.map((a, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
+              <p className="text-[10px] text-slate-300 leading-snug">{a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Info Panel ──────────────────────────────────────────── */
 
 function InfoPanel({
@@ -976,11 +1081,19 @@ function InfoPanel({
 
         <div className="mt-3 flex items-center gap-2">
           <div className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${
-            event.source === "usgs" ? "bg-indigo-400/10 text-indigo-400 border border-indigo-400/20" : "bg-slate-700/50 text-slate-400 border border-white/8"
+            event.source === "usgs" ? "bg-indigo-400/10 text-indigo-400 border border-indigo-400/20"
+            : event.source === "gdacs" ? "bg-orange-400/10 text-orange-400 border border-orange-400/20"
+            : event.source === "eonet" ? "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
+            : "bg-slate-700/50 text-slate-400 border border-white/8"
           }`}>
-            {event.source === "usgs" ? "🌐 USGS Live Feed" : "📊 Sample Data"}
+            {event.source === "usgs" ? "🌐 USGS Live Feed"
+              : event.source === "gdacs" ? "🌍 GDACS Live"
+              : event.source === "eonet" ? "🛰 NASA EONET"
+              : "📊 Sample Data"}
           </div>
         </div>
+
+        <AIIncidentSection event={event} />
 
         {related.length > 0 && (
           <div className="mt-5">

@@ -96,3 +96,54 @@ export function useAIInsights() {
     retry: 1,
   });
 }
+
+export interface ProviderStatus {
+  gemini: boolean;
+  openrouter: boolean;
+  groq: boolean;
+  currentProvider: string;
+  healthy: boolean;
+}
+
+export function useProviderStatus() {
+  return useQuery<ProviderStatus>({
+    queryKey: ["provider-status"],
+    queryFn: () => fetchJson<ProviderStatus>(`${BASE}/api/raksh/status`),
+    refetchInterval: 60_000,
+    staleTime: 55_000,
+    retry: 1,
+  });
+}
+
+export interface IntelligenceFeedEvent {
+  id: string;
+  type: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  severity: "critical" | "high" | "moderate" | "low";
+  time: string;
+  source: string;
+  country: string;
+  location: string;
+  detail: string;
+  url: string;
+  aiSummary: string;
+}
+
+export interface IntelligenceFeed {
+  fetchedAt: string;
+  events: IntelligenceFeedEvent[];
+  total: number;
+  sources: { usgs: boolean; gdacs: boolean; eonet: boolean; noaa: boolean; internal: boolean };
+}
+
+export function useIntelligenceFeed() {
+  return useQuery<IntelligenceFeed>({
+    queryKey: ["intelligence-feed"],
+    queryFn: () => fetchJson<IntelligenceFeed>(`${BASE}/api/raksh/intelligence-feed`),
+    refetchInterval: 60_000,
+    staleTime: 55_000,
+    retry: 2,
+  });
+}
