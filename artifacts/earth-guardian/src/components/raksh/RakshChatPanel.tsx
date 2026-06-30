@@ -40,6 +40,8 @@ import type { RakshCommand, RakshGeneratedImage } from "./RakshContext";
 import { useRaksh } from "./RakshContext";
 import { RakshMarkdown } from "./RakshMarkdown";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
+import { useProviderStatus } from "@/hooks/useLiveIntelligence";
+import { ReportExportPanel } from "./ReportExportPanel";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -280,6 +282,14 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   } = useRaksh();
 
   const { speak, stop: stopSpeaking, speakingId, isSupported: ttsSupported } = useVoiceOutput();
+  const { data: providerStatus } = useProviderStatus();
+  const activeProvider =
+    providerStatus?.currentProvider && providerStatus.currentProvider !== "none"
+      ? providerStatus.currentProvider
+      : providerStatus?.gemini ? "gemini"
+      : providerStatus?.openrouter ? "openrouter"
+      : providerStatus?.groq ? "groq"
+      : null;
 
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -292,9 +302,12 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
   const [showSearch, setShowSearch] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [voiceCopilotMode, setVoiceCopilotMode] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportData, setReportData] = useState<{ content: string; generatedAt: string } | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<RakshGeneratedImage | null>(null);
   const handsFreeRef = useRef(false);
+  const voiceCopilotRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -308,15 +321,30 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isStreaming]);
 
-  // Keep ref in sync for use in callbacks without stale closure issues
+  // Keep refs in sync for use in callbacks without stale closure issues
   useEffect(() => { handsFreeRef.current = handsFreeMode; }, [handsFreeMode]);
+  useEffect(() => { voiceCopilotRef.current = voiceCopilotMode; }, [voiceCopilotMode]);
 
+  // Voice Copilot: auto-speak last assistant message + restart mic when done
   // Hands-free: auto-restart mic after Raksh finishes responding
   useEffect(() => {
-    if (!isStreaming && handsFreeRef.current && !isRecording) {
+    if (isStreaming) return undefined;
+
+    // Voice Copilot auto-speak
+    if (voiceCopilotRef.current && ttsSupported) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg?.role === "assistant" && lastMsg.content && lastMsg.content !== "🎨 Generating your image with Raksh AI…") {
+        speak(lastMsg.id, lastMsg.content);
+      }
+    }
+
+    // Auto-restart mic (voice copilot or hands-free)
+    const shouldRestart = voiceCopilotRef.current || handsFreeRef.current;
+    if (shouldRestart && !isRecording) {
+      const delay = voiceCopilotRef.current ? 1400 : 800;
       const timer = setTimeout(() => {
-        if (handsFreeRef.current) startVoiceRecording();
-      }, 800);
+        if (voiceCopilotRef.current || handsFreeRef.current) startVoiceRecording();
+      }, delay);
       return () => clearTimeout(timer);
     }
     return undefined;
@@ -399,19 +427,34 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
     rec.continuous = false;
     rec.interimResults = true;
     rec.lang = navigator.language || "en-US";
+    let finalTranscript = "";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((r: any) => r[0].transcript)
-        .join("");
-      setInput(transcript);
+      let interim = "";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const result of Array.from(e.results) as any[]) {
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      setInput(finalTranscript + interim);
     };
-    rec.onend = () => setIsRecording(false);
+    rec.onend = () => {
+      setIsRecording(false);
+      // Voice Copilot: auto-send when recognition ends with a final transcript
+      if (voiceCopilotRef.current && finalTranscript.trim()) {
+        const text = finalTranscript.trim();
+        setInput("");
+        sendMessage(text);
+      }
+    };
+    rec.onerror = () => setIsRecording(false);
     rec.start();
     recognitionRef.current = rec;
     setIsRecording(true);
-  }, []);
+  }, [sendMessage]);
 
   const handleVoice = useCallback(() => {
     if (isRecording) {
@@ -466,22 +509,14 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
         throw new Error((err as { error: string }).error);
       }
       const data = await res.json() as { content: string; generatedAt: string };
-      const filename = `earth-guardian-report-${new Date().toISOString().split("T")[0]}.md`;
-      const blob = new Blob([data.content], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      // Also show a brief message in chat
-      await sendMessage("📄 I just generated a comprehensive Disaster Intelligence Report. It has been downloaded to your device. Would you like me to summarize the key findings?");
+      // Show report export panel instead of auto-downloading
+      setReportData({ content: data.content, generatedAt: data.generatedAt });
     } catch (err) {
       console.error("[Raksh] Report generation failed:", err);
     } finally {
       setIsGeneratingReport(false);
     }
-  }, [isGeneratingReport, isStreaming, sendMessage]);
+  }, [isGeneratingReport, isStreaming]);
 
   const handleExportChat = () => {
     if (!activeConversation || messages.length === 0) return;
@@ -700,10 +735,48 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 <Search className="h-4 w-4" />
               </button>
             )}
+            {/* Active provider badge */}
+            {activeProvider && (
+              <div
+                className="hidden sm:flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-medium"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+                title={`Active AI: ${activeProvider}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                <span className="text-slate-400 capitalize">{activeProvider}</span>
+              </div>
+            )}
+
+            {/* Voice Copilot toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !voiceCopilotMode;
+                setVoiceCopilotMode(next);
+                if (next) setHandsFreeMode(false);
+                if (next && !isRecording) startVoiceRecording();
+                if (!next) { recognitionRef.current?.stop(); stopSpeaking(); }
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors",
+                voiceCopilotMode
+                  ? "text-cyan-300 bg-cyan-500/15 border border-cyan-500/30"
+                  : "text-slate-400 hover:text-white hover:bg-white/8",
+              )}
+              title={voiceCopilotMode ? "Voice Copilot ON — speak to send, AI speaks back" : "Enable Voice Copilot (speak → AI → speak)"}
+            >
+              {voiceCopilotMode ? <Volume2 className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+              {!compact && <span>Copilot</span>}
+            </button>
+
             {/* Hands-free mode toggle */}
             <button
               type="button"
-              onClick={() => setHandsFreeMode(m => !m)}
+              onClick={() => {
+                const next = !handsFreeMode;
+                setHandsFreeMode(next);
+                if (next) setVoiceCopilotMode(false);
+              }}
               className={cn(
                 "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors",
                 handsFreeMode
@@ -713,7 +786,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               title={handsFreeMode ? "Hands-free ON — mic restarts automatically" : "Enable hands-free voice mode"}
             >
               <Headphones className="h-3.5 w-3.5" />
-              {!compact && <span>{handsFreeMode ? "Hands-free" : "Hands-free"}</span>}
+              {!compact && <span>Hands-free</span>}
             </button>
 
             {/* Generate Report */}
@@ -723,7 +796,7 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               disabled={isGeneratingReport || isStreaming}
               className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-violet-300 hover:text-white transition-colors disabled:opacity-40"
               style={{ background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)" }}
-              title="Generate comprehensive disaster intelligence report (downloads as .md)"
+              title="Generate comprehensive disaster intelligence report"
             >
               {isGeneratingReport ? (
                 <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1042,6 +1115,22 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
             )}
           </AnimatePresence>
 
+          {/* Voice Copilot active banner */}
+          <AnimatePresence>
+            {voiceCopilotMode && !isRecording && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-2 rounded-xl px-3 py-2 flex items-center gap-2"
+                style={{ background: "rgba(0,188,212,0.08)", border: "1px solid rgba(0,188,212,0.22)" }}
+              >
+                <Volume2 className="h-3.5 w-3.5 text-cyan-400 flex-shrink-0" />
+                <span className="text-xs text-cyan-300">Voice Copilot active — speak your question, Raksh will respond aloud</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Recording indicator */}
           <AnimatePresence>
             {isRecording && (
@@ -1050,11 +1139,16 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 className="mb-2 rounded-xl px-3 py-2 flex items-center gap-2"
-                style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)" }}
+                style={{
+                  background: voiceCopilotMode ? "rgba(0,188,212,0.10)" : "rgba(239,68,68,0.10)",
+                  border: `1px solid ${voiceCopilotMode ? "rgba(0,188,212,0.30)" : "rgba(239,68,68,0.25)"}`,
+                }}
               >
-                <div className="h-2 w-2 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+                <div className={`h-2 w-2 rounded-full animate-pulse flex-shrink-0 ${voiceCopilotMode ? "bg-cyan-400" : "bg-red-400"}`} />
                 <VoiceWaveform />
-                <span className="text-xs text-red-300 ml-1">Listening… speak now</span>
+                <span className={`text-xs ml-1 ${voiceCopilotMode ? "text-cyan-300" : "text-red-300"}`}>
+                  {voiceCopilotMode ? "Listening… will auto-send" : "Listening… speak now"}
+                </span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1205,6 +1299,17 @@ export function RakshChatPanel({ compact = false, showSidebar = false }: Props) 
               <p className="text-xs text-slate-400 truncate">🎨 {fullscreenImage.prompt}</p>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Report Export Panel modal */}
+      <AnimatePresence>
+        {reportData && (
+          <ReportExportPanel
+            content={reportData.content}
+            generatedAt={reportData.generatedAt}
+            onClose={() => setReportData(null)}
+          />
         )}
       </AnimatePresence>
     </div>

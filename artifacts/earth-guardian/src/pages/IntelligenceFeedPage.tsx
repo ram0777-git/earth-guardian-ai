@@ -189,8 +189,34 @@ function EventCard({ event, index }: { event: IntelligenceFeedEvent; index: numb
 function SourceDot({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div className="flex items-center gap-1.5 text-[10px]">
-      <div className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
+      <span className="relative flex h-1.5 w-1.5">
+        {ok && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
+      </span>
       <span className={ok ? "text-slate-400" : "text-red-400"}>{label}</span>
+    </div>
+  );
+}
+
+function EventCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-4 animate-pulse">
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 flex-shrink-0 rounded-xl bg-white/[0.06]" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="h-3.5 w-48 rounded-full bg-white/[0.07]" />
+            <div className="h-4 w-16 rounded-full bg-white/[0.05]" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-12 rounded-full bg-white/[0.05]" />
+            <div className="h-3 w-20 rounded-full bg-white/[0.04]" />
+            <div className="h-3 w-14 rounded-full bg-white/[0.04]" />
+          </div>
+          <div className="h-3 w-full rounded-full bg-white/[0.05]" />
+          <div className="h-3 w-3/4 rounded-full bg-white/[0.04]" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -299,9 +325,21 @@ export default function IntelligenceFeedPage() {
                   <Layers className="h-5 w-5 text-cyan-400" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">
-                    Unified Intelligence Feed
-                  </h1>
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">
+                      Unified Intelligence Feed
+                    </h1>
+                    <div
+                      className="flex items-center gap-1.5 rounded-full border px-2 py-0.5"
+                      style={{ background: "rgba(52,211,153,0.1)", borderColor: "rgba(52,211,153,0.3)" }}
+                    >
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400">Live</span>
+                    </div>
+                  </div>
                   <p className="text-sm text-slate-400 mt-0.5">
                     All sources · USGS · GDACS · NASA EONET · NOAA · Platform
                   </p>
@@ -546,7 +584,7 @@ export default function IntelligenceFeedPage() {
         {isLoading ? (
           <div className="space-y-3">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-24 animate-pulse rounded-2xl border border-white/6 bg-white/[0.03]" />
+              <EventCardSkeleton key={i} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
