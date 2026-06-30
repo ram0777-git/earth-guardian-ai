@@ -25,14 +25,15 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
 // ── Constants ──────────────────────────────────────────────────────────────────
 const TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 1;
-const COOLDOWN_MS = 30 * 60_000;        // 30 minutes for all failures (spec requirement)
-const QUOTA_COOLDOWN_MS = 60 * 60_000;  // 60 minutes for quota exhaustion
+const RETRY_DELAY_MS = 2_000;                // 2s fixed retry delay (spec)
+const COOLDOWN_MS = 30 * 60_000;             // 30 minutes
+const QUOTA_COOLDOWN_MS = 60 * 60_000;       // 60 minutes for quota exhaustion
 const SERVER_START = Date.now();
-const VERSION = "3.0.0";
+const VERSION = "3.1.0";
 
 // ── Error classification ───────────────────────────────────────────────────────
 function isQuotaError(msg: string): boolean {
-  return /free.tier|GenerateRequestsPerDay|quota.*day|daily.*limit|per_day|RESOURCE_EXHAUSTED/i.test(msg);
+  return /free.tier|GenerateRequestsPerDay|quota.*day|daily.*limit|per_day|RESOURCE_EXHAUSTED|quota.?exceeded/i.test(msg);
 }
 
 function isRateLimitError(msg: string): boolean {
@@ -45,7 +46,22 @@ function isAuthError(msg: string): boolean {
 
 function isTransientError(msg: string): boolean {
   if (isAuthError(msg) || isQuotaError(msg)) return false;
-  return /500|503|overloaded|timeout|UNAVAILABLE|network|aborted/i.test(msg) || isRateLimitError(msg);
+  return (
+    /500|502|503|overloaded|high.?demand|model.?unavailable|timeout|UNAVAILABLE|network|aborted/i.test(msg) ||
+    isRateLimitError(msg)
+  );
+}
+
+// ── Safe user-facing error sanitizer ──────────────────────────────────────────
+export function sanitizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (isAuthError(msg))  return "AI service configuration error. Please contact support.";
+  if (isQuotaError(msg)) return "AI service is temporarily at capacity. Please try again later.";
+  if (isRateLimitError(msg)) return "Too many requests. Please wait a moment and try again.";
+  if (isTransientError(msg)) return "AI service temporarily unavailable. Please try again.";
+  // Pass through clean application-level errors (our own messages)
+  if (/^(Configuration Error|All AI|Gemini daily)/i.test(msg)) return msg;
+  return "AI service temporarily unavailable. Please try again.";
 }
 
 // ── Provider health state ──────────────────────────────────────────────────────
@@ -70,6 +86,7 @@ class AIProviderManager {
   private currentProvider: "gemini" | "openrouter" | "groq" | "none" = "none";
   private lastSwitch: { from: string; to: string; reason: string; at: string } | null = null;
   private lastFailure: { provider: string; error: string; at: string } | null = null;
+  private failoverCount = 0;
 
   private readonly health: Record<string, ProviderHealth> = {
     gemini:     { name: "Gemini",     available: true, quotaState: "unknown", requestCount: 0, successCount: 0, failureCount: 0 },
@@ -83,7 +100,6 @@ class AIProviderManager {
     if (!h) return false;
     if (h.available) return true;
     if (h.cooldownUntil && Date.now() >= h.cooldownUntil) {
-      // Cooldown expired — restore availability
       h.available = true;
       h.cooldownUntil = undefined;
       h.failedAt = undefined;
@@ -117,9 +133,16 @@ class AIProviderManager {
 
   private switchTo(to: string, from: string, reason: string): void {
     if (this.currentProvider !== to) {
+      const prevProvider = this.currentProvider;
       this.lastSwitch = { from, to, reason, at: new Date().toISOString() };
       this.currentProvider = to as typeof this.currentProvider;
-      console.log(`[ProviderManager] Switched ${from} → ${to} (${reason})`);
+      // Only count as a failover if we are switching away from a real provider
+      if (prevProvider !== "none") {
+        this.failoverCount++;
+      }
+      const fromLabel = from.charAt(0).toUpperCase() + from.slice(1);
+      const toLabel   = to.charAt(0).toUpperCase()   + to.slice(1);
+      console.log(`✓ Switched ${fromLabel} → ${toLabel} (${reason})`);
     }
   }
 
@@ -133,37 +156,103 @@ class AIProviderManager {
     return getGeminiGenerativeModel(systemInstruction, temperature, maxOutputTokens);
   }
 
-  /** One-shot generation — Gemini only, no fallback. Used for image prompts, reports, etc. */
+  /**
+   * One-shot generation — Gemini primary, falls back to OpenRouter then Groq.
+   * Used for reports, briefs, simulations, etc.
+   */
   async generate(
     systemInstruction: string,
     prompt: string,
     temperature = 0.7,
     maxOutputTokens = 8192,
   ): Promise<string> {
-    if (!isGeminiReady()) {
-      const diag = getGeminiDiagnostics();
-      throw new Error(
-        !diag.envKeyPresent
-          ? "Configuration Error: GEMINI_API_KEY not found in Replit Secrets."
-          : "Gemini client failed to initialize.",
-      );
+    const geminiOk     = isGeminiReady()       && this.isAvailable("gemini");
+    const openrouterOk = openrouterKeyLoaded()  && this.isAvailable("openrouter");
+    const groqOk       = groqKeyLoaded()        && this.isAvailable("groq");
+
+    // ── Gemini attempt ───────────────────────────────────────────────────────
+    if (geminiOk) {
+      const h = this.health["gemini"]!;
+      h.requestCount++;
+      let attempt = 0;
+      while (attempt <= MAX_RETRIES) {
+        try {
+          const model = getGeminiGenerativeModel(systemInstruction, temperature, maxOutputTokens);
+          const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
+          this.markSuccess("gemini");
+          this.switchTo("gemini", this.currentProvider, "primary provider");
+          return result.response.text();
+        } catch (err: unknown) {
+          attempt++;
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[ProviderManager] Gemini generate attempt ${attempt} failed:`, msg.slice(0, 200));
+          if (isAuthError(msg)) {
+            this.markFailed("gemini", "auth_error", msg, COOLDOWN_MS);
+            break;
+          }
+          if (isQuotaError(msg)) {
+            this.markFailed("gemini", "exhausted", msg, QUOTA_COOLDOWN_MS);
+            console.warn("[ProviderManager] Gemini quota — falling back");
+            break;
+          }
+          if (isTransientError(msg) && attempt <= MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+            continue;
+          }
+          if (isTransientError(msg)) this.markFailed("gemini", "unavailable", msg, COOLDOWN_MS);
+          break;
+        }
+      }
     }
-    try {
-      const model = getGeminiGenerativeModel(systemInstruction, temperature, maxOutputTokens);
-      const result = await withTimeout(model.generateContent(prompt), TIMEOUT_MS);
-      this.markSuccess("gemini");
-      return result.response.text();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (isAuthError(msg))  throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
-      if (isQuotaError(msg)) { this.markFailed("gemini", "exhausted", msg, QUOTA_COOLDOWN_MS); throw new Error("Gemini daily quota reached. Please try again later."); }
-      throw err;
+
+    // ── OpenRouter fallback ──────────────────────────────────────────────────
+    if (openrouterOk) {
+      const h = this.health["openrouter"]!;
+      h.requestCount++;
+      console.log("[ProviderManager] generate — trying OpenRouter");
+      try {
+        const text = await callOpenRouter(systemInstruction, prompt, TIMEOUT_MS);
+        if (text) {
+          this.markSuccess("openrouter");
+          this.switchTo("openrouter", this.currentProvider, "Gemini unavailable");
+          console.log("✓ Switched Gemini → OpenRouter (generate fallback)");
+          return text;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        console.error("[ProviderManager] OpenRouter generate error:", msg.slice(0, 200));
+        const state: QuotaState = isQuotaError(msg) ? "exhausted" : isRateLimitError(msg) ? "rate_limited" : isAuthError(msg) ? "auth_error" : "unavailable";
+        this.markFailed("openrouter", state, msg, isQuotaError(msg) ? QUOTA_COOLDOWN_MS : COOLDOWN_MS);
+      }
     }
+
+    // ── Groq fallback ────────────────────────────────────────────────────────
+    if (groqOk) {
+      const h = this.health["groq"]!;
+      h.requestCount++;
+      console.log("[ProviderManager] generate — trying Groq");
+      try {
+        const text = await callGroq(systemInstruction, prompt, TIMEOUT_MS);
+        if (text) {
+          this.markSuccess("groq");
+          this.switchTo("groq", this.currentProvider, "Gemini+OpenRouter unavailable");
+          console.log("✓ Switched OpenRouter → Groq (generate fallback)");
+          return text;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        console.error("[ProviderManager] Groq generate error:", msg.slice(0, 200));
+        const state: QuotaState = isQuotaError(msg) ? "exhausted" : isRateLimitError(msg) ? "rate_limited" : isAuthError(msg) ? "auth_error" : "unavailable";
+        this.markFailed("groq", state, msg, isQuotaError(msg) ? QUOTA_COOLDOWN_MS : COOLDOWN_MS);
+      }
+    }
+
+    throw new Error("All AI providers are temporarily unavailable. Please try again in a moment.");
   }
 
-  /** Multimodal image analysis — Gemini only. */
+  /** Multimodal image analysis — Gemini only (vision capability). */
   async analyzeImage(systemInstruction: string, imageData: string, mimeType: string, prompt: string): Promise<string> {
-    if (!isGeminiReady()) throw new Error("Configuration Error: GEMINI_API_KEY not found in Replit Secrets.");
+    if (!isGeminiReady()) throw new Error("Gemini vision is not configured.");
     try {
       const model = getGeminiGenerativeModel(systemInstruction, 0.4, 4096);
       const result = await withTimeout(
@@ -174,9 +263,9 @@ class AIProviderManager {
       return result.response.text();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (isAuthError(msg))  throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
-      if (isQuotaError(msg)) { this.markFailed("gemini", "exhausted", msg, QUOTA_COOLDOWN_MS); throw new Error("Gemini daily quota reached."); }
-      throw err;
+      if (isAuthError(msg))  { this.markFailed("gemini", "auth_error", msg, COOLDOWN_MS); throw new Error("AI vision service configuration error."); }
+      if (isQuotaError(msg)) { this.markFailed("gemini", "exhausted", msg, QUOTA_COOLDOWN_MS); throw new Error("AI vision service is temporarily at capacity. Please try again later."); }
+      throw new Error("Image analysis temporarily unavailable. Please try again.");
     }
   }
 
@@ -191,9 +280,9 @@ class AIProviderManager {
     onChunk: (text: string) => void,
   ): Promise<{ provider: string }> {
     this.lastHealthCheck = new Date().toISOString();
-    const geminiOk     = isGeminiReady()      && this.isAvailable("gemini");
-    const openrouterOk = openrouterKeyLoaded() && this.isAvailable("openrouter");
-    const groqOk       = groqKeyLoaded()       && this.isAvailable("groq");
+    const geminiOk     = isGeminiReady()       && this.isAvailable("gemini");
+    const openrouterOk = openrouterKeyLoaded()  && this.isAvailable("openrouter");
+    const groqOk       = groqKeyLoaded()        && this.isAvailable("groq");
 
     console.log(
       `[ProviderManager] streamChat — gemini=${geminiOk} openrouter=${openrouterOk} groq=${groqOk}`,
@@ -234,7 +323,7 @@ class AIProviderManager {
 
           if (isAuthError(msg)) {
             this.markFailed("gemini", "auth_error", msg, COOLDOWN_MS);
-            throw new Error("Configuration Error: GEMINI_API_KEY is invalid or unauthorized.");
+            break;
           }
           if (isQuotaError(msg)) {
             this.markFailed("gemini", "exhausted", msg, QUOTA_COOLDOWN_MS);
@@ -247,7 +336,8 @@ class AIProviderManager {
             break;
           }
           if (isTransientError(msg) && attempt <= MAX_RETRIES) {
-            await new Promise(r => setTimeout(r, 800 * attempt));
+            console.log(`[ProviderManager] Gemini transient error — retrying in ${RETRY_DELAY_MS}ms`);
+            await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
             continue;
           }
           if (isTransientError(msg)) this.markFailed("gemini", "unavailable", msg, COOLDOWN_MS);
@@ -267,7 +357,7 @@ class AIProviderManager {
     // ── Fallback banner ──────────────────────────────────────────────────────
     const hasFallback = openrouterOk || groqOk;
     if (hasFallback) {
-      onChunk("⚡ Switching to backup AI provider…\n\n");
+      onChunk("⚡ Switching to backup AI...\n\n");
     }
 
     // ── OpenRouter ───────────────────────────────────────────────────────────
@@ -280,7 +370,7 @@ class AIProviderManager {
         if (text) {
           this.markSuccess("openrouter");
           this.switchTo("openrouter", this.currentProvider, "Gemini unavailable");
-          console.log("[ProviderManager] OpenRouter OK");
+          console.log("✓ Switched Gemini → OpenRouter");
           onChunk(text);
           return { provider: "openrouter" };
         }
@@ -302,7 +392,7 @@ class AIProviderManager {
         if (text) {
           this.markSuccess("groq");
           this.switchTo("groq", this.currentProvider, "Gemini+OpenRouter unavailable");
-          console.log("[ProviderManager] Groq OK");
+          console.log("✓ Switched OpenRouter → Groq");
           onChunk(text);
           return { provider: "groq" };
         }
@@ -346,71 +436,82 @@ class AIProviderManager {
     const grDiag  = getGroqDiagnostics();
 
     const availableProviders: string[] = [];
-    if (isGeminiReady()      && this.isAvailable("gemini"))     availableProviders.push("gemini");
-    if (openrouterKeyLoaded() && this.isAvailable("openrouter")) availableProviders.push("openrouter");
-    if (groqKeyLoaded()       && this.isAvailable("groq"))       availableProviders.push("groq");
+    if (isGeminiReady()       && this.isAvailable("gemini"))     availableProviders.push("gemini");
+    if (openrouterKeyLoaded()  && this.isAvailable("openrouter")) availableProviders.push("openrouter");
+    if (groqKeyLoaded()        && this.isAvailable("groq"))       availableProviders.push("groq");
 
-    // Determine active current provider
     const activeProvider = availableProviders[0] ?? "none";
     if (this.currentProvider === "none" && activeProvider !== "none") {
       this.currentProvider = activeProvider as typeof this.currentProvider;
     }
 
     const gemH = this.health["gemini"]!;
+    const orH  = this.health["openrouter"]!;
+    const grH  = this.health["groq"]!;
+
     const gemKeyDiag = !gemDiag.envKeyPresent
       ? "GEMINI_API_KEY missing from process.env — add to Replit Secrets and restart."
       : undefined;
+
+    const now = Date.now();
+    const cooldownRemaining = (h: ProviderHealth) =>
+      h.cooldownUntil && h.cooldownUntil > now
+        ? Math.ceil((h.cooldownUntil - now) / 60_000)
+        : null;
 
     return {
       version: VERSION,
       uptime: uptimeSeconds,
       currentProvider: this.currentProvider,
       availableProviders,
+      failoverCount: this.failoverCount,
       lastSwitch: this.lastSwitch,
       lastFailure: this.lastFailure,
       lastHealthCheck: this.lastHealthCheck,
       lastInitialization: this.initializedAt,
       providerHealth: {
         gemini: {
-          keyLoaded:      geminiKeyLoaded(),
-          envKeyPresent:  gemDiag.envKeyPresent,
-          envKeyLength:   gemDiag.envKeyLength,
-          clientCached:   gemDiag.clientCached,
-          available:      isGeminiReady() && this.isAvailable("gemini"),
-          quotaState:     gemH.quotaState,
-          cooldownUntil:  gemH.cooldownUntil ? new Date(gemH.cooldownUntil).toISOString() : null,
-          requestCount:   gemH.requestCount,
-          successCount:   gemH.successCount,
-          failureCount:   gemH.failureCount,
-          lastError:      gemH.lastError ?? null,
+          keyLoaded:               geminiKeyLoaded(),
+          envKeyPresent:           gemDiag.envKeyPresent,
+          envKeyLength:            gemDiag.envKeyLength,
+          clientCached:            gemDiag.clientCached,
+          available:               isGeminiReady() && this.isAvailable("gemini"),
+          quotaState:              gemH.quotaState,
+          cooldownUntil:           gemH.cooldownUntil ? new Date(gemH.cooldownUntil).toISOString() : null,
+          cooldownRemainingMinutes: cooldownRemaining(gemH),
+          requestCount:            gemH.requestCount,
+          successCount:            gemH.successCount,
+          failureCount:            gemH.failureCount,
+          lastError:               gemH.lastError ?? null,
           ...(gemKeyDiag ? { diagnostic: gemKeyDiag } : {}),
         },
         openrouter: {
-          keyLoaded:      openrouterKeyLoaded(),
-          envKeyPresent:  orDiag.envKeyPresent,
-          envKeyLength:   orDiag.envKeyLength,
-          available:      openrouterKeyLoaded() && this.isAvailable("openrouter"),
-          quotaState:     this.health["openrouter"]!.quotaState,
-          cooldownUntil:  this.health["openrouter"]?.cooldownUntil ? new Date(this.health["openrouter"].cooldownUntil!).toISOString() : null,
-          requestCount:   this.health["openrouter"]!.requestCount,
-          successCount:   this.health["openrouter"]!.successCount,
-          failureCount:   this.health["openrouter"]!.failureCount,
-          lastError:      this.health["openrouter"]!.lastError ?? null,
+          keyLoaded:               openrouterKeyLoaded(),
+          envKeyPresent:           orDiag.envKeyPresent,
+          envKeyLength:            orDiag.envKeyLength,
+          available:               openrouterKeyLoaded() && this.isAvailable("openrouter"),
+          quotaState:              orH.quotaState,
+          cooldownUntil:           orH.cooldownUntil ? new Date(orH.cooldownUntil).toISOString() : null,
+          cooldownRemainingMinutes: cooldownRemaining(orH),
+          requestCount:            orH.requestCount,
+          successCount:            orH.successCount,
+          failureCount:            orH.failureCount,
+          lastError:               orH.lastError ?? null,
         },
         groq: {
-          keyLoaded:      groqKeyLoaded(),
-          envKeyPresent:  grDiag.envKeyPresent,
-          envKeyLength:   grDiag.envKeyLength,
-          available:      groqKeyLoaded() && this.isAvailable("groq"),
-          quotaState:     this.health["groq"]!.quotaState,
-          cooldownUntil:  this.health["groq"]?.cooldownUntil ? new Date(this.health["groq"].cooldownUntil!).toISOString() : null,
-          requestCount:   this.health["groq"]!.requestCount,
-          successCount:   this.health["groq"]!.successCount,
-          failureCount:   this.health["groq"]!.failureCount,
-          lastError:      this.health["groq"]!.lastError ?? null,
+          keyLoaded:               groqKeyLoaded(),
+          envKeyPresent:           grDiag.envKeyPresent,
+          envKeyLength:            grDiag.envKeyLength,
+          available:               groqKeyLoaded() && this.isAvailable("groq"),
+          quotaState:              grH.quotaState,
+          cooldownUntil:           grH.cooldownUntil ? new Date(grH.cooldownUntil).toISOString() : null,
+          cooldownRemainingMinutes: cooldownRemaining(grH),
+          requestCount:            grH.requestCount,
+          successCount:            grH.successCount,
+          failureCount:            grH.failureCount,
+          lastError:               grH.lastError ?? null,
         },
       },
-      // Legacy fields for backward compatibility
       provider: "gemini",
       model: GEMINI_MODEL,
       healthy: availableProviders.length > 0,

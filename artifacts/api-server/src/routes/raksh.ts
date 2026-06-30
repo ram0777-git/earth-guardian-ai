@@ -13,7 +13,7 @@ import {
   buildLiveIntelligenceContext,
   fetchLiveIntelligence,
 } from "../services/liveIntelligence";
-import { getAIProvider, withTimeout } from "../ai/provider";
+import { getAIProvider, withTimeout, sanitizeError } from "../ai/provider";
 
 const router = Router();
 
@@ -352,17 +352,14 @@ router.get("/raksh/intelligence/status", async (_req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Status check failed" });
+    console.error("[Raksh] Status check error:", err);
+    res.status(500).json({ error: "Status check temporarily unavailable." });
   }
 });
 
 // ── Route: Daily Disaster Brief ────────────────────────────────────────────────
 router.get("/raksh/brief", async (_req, res) => {
   const provider = getAIProvider();
-  if (!provider.isGeminiReady()) {
-    res.status(503).json({ error: "Gemini API key not configured" });
-    return;
-  }
 
   try {
     const liveData = await withTimeout(fetchLiveIntelligence(), 20_000);
@@ -403,7 +400,8 @@ Be specific. Use actual event names, magnitudes, and locations from the data. Ci
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Brief generation failed" });
+    console.error("[Raksh] Brief generation error:", err);
+    res.status(500).json({ error: sanitizeError(err) });
   }
 });
 
@@ -453,7 +451,7 @@ router.post("/raksh/analyze-image", async (req, res) => {
     res.json({ content });
   } catch (err) {
     console.error("[Raksh] Image analysis error:", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Image analysis failed" });
+    res.status(500).json({ error: sanitizeError(err) });
   }
 });
 
@@ -471,10 +469,6 @@ router.post("/raksh/analyze-document", async (req, res) => {
   }
 
   const provider = getAIProvider();
-  if (!provider.isGeminiReady()) {
-    res.status(503).json({ error: "Gemini not configured" });
-    return;
-  }
 
   const truncated = docContent.slice(0, 32000);
   const prompt = userPrompt ||
@@ -495,7 +489,7 @@ router.post("/raksh/analyze-document", async (req, res) => {
     res.json({ content });
   } catch (err) {
     console.error("[Raksh] Document analysis error:", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Document analysis failed" });
+    res.status(500).json({ error: sanitizeError(err) });
   }
 });
 
@@ -537,9 +531,8 @@ router.post("/raksh/chat", async (req, res) => {
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "AI unavailable";
-    console.error("[Raksh] streamChat failed:", msg);
-    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+    console.error("[Raksh] streamChat failed:", err instanceof Error ? err.message : err);
+    res.write(`data: ${JSON.stringify({ error: sanitizeError(err) })}\n\n`);
     res.end();
   }
 });
@@ -613,8 +606,8 @@ Guidelines:
 
     res.json({ imageData, mimeType: contentType, prompt, enhancedPrompt: finalPrompt, provider: "pollinations/flux", seed, width, height });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Image generation failed";
-    res.status(500).json({ error: msg });
+    console.error("[Raksh] Image generation error:", err);
+    res.status(500).json({ error: "Image generation temporarily unavailable. Please try again." });
   }
 });
 
@@ -633,10 +626,6 @@ router.post("/raksh/simulate", async (req, res) => {
   }
 
   const provider = getAIProvider();
-  if (!provider.isGeminiReady()) {
-    res.status(503).json({ error: "Gemini not configured" });
-    return;
-  }
 
   const populationCtx = population ? ` (estimated population: ${population.toLocaleString()})` : "";
 
@@ -679,18 +668,13 @@ Be specific and realistic based on the location and disaster type.`;
     res.json({ simulation: data, generatedAt: new Date().toISOString() });
   } catch (err) {
     console.error("[Raksh] Simulation error:", err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Simulation failed" });
+    res.status(500).json({ error: sanitizeError(err) });
   }
 });
 
 // ── Route: Comprehensive Intelligence Report ────────────────────────────────────
 router.post("/raksh/generate-report", async (req, res) => {
   const provider = getAIProvider();
-  if (!provider.isGeminiReady()) {
-    res.status(503).json({ error: "Gemini API key not configured" });
-    return;
-  }
-
   const { location, focusArea, userContext, format } = req.body as {
     location?: string;
     focusArea?: string;
@@ -799,7 +783,8 @@ Be specific and data-driven. Use actual event names, magnitudes, and locations f
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Report generation failed" });
+    console.error("[Raksh] Report generation error:", err);
+    res.status(500).json({ error: sanitizeError(err) });
   }
 });
 
@@ -855,7 +840,8 @@ router.get("/raksh/live-stats", async (_req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "live-stats failed" });
+    console.error("[Raksh] live-stats error:", err);
+    res.status(500).json({ error: "Live statistics temporarily unavailable. Please try again." });
   }
 });
 
@@ -933,7 +919,8 @@ router.get("/raksh/live-events", async (_req, res) => {
 
     res.json({ fetchedAt: data.fetchedAt, events, total: events.length });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "live-events failed" });
+    console.error("[Raksh] live-events error:", err);
+    res.status(500).json({ error: "Live event data temporarily unavailable. Please try again." });
   }
 });
 
@@ -1004,7 +991,8 @@ Respond with ONLY this JSON structure:
     _aiInsightsCache = { data: response, expiresAt: now + 5 * 60 * 1000 };
     return res.json(response);
   } catch (err) {
-    return res.status(500).json({ error: err instanceof Error ? err.message : "AI insights failed" });
+    console.error("[Raksh] AI insights error:", err);
+    return res.status(500).json({ error: "AI insights temporarily unavailable. Please try again." });
   }
 });
 
